@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lottery.mapper.LotteryResultMapper">
+
+    <!-- 用于 MySQL 时，将 INSERT OR IGNORE 改为 INSERT IGNORE -->
+    <!-- 这里保留注解方式，XML 作为扩展点 -->
+
+</mapper>

@@ -1,0 +1,40 @@
+server:
+  port: 8080
+
+spring:
+  # ===== 默认 SQLite =====
+  # 切换 MySQL 只需改下面 datasource 配置即可
+  datasource:
+    url: jdbc:sqlite:${LOTTERY_DB_PATH:./data/lottery.db}
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 5
+
+  # ===== MySQL 配置（取消注释即可切换）=====
+  # datasource:
+  #   url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DB:lottery}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+  #   username: ${MYSQL_USER:root}
+  #   password: ${MYSQL_PASSWORD:}
+  #   driver-class-name: com.mysql.cj.jdbc.Driver
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    com.lottery: DEBUG
+    root: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%level] %msg%n"
+
+lottery:
+  fetch:
+    hour: 22
+    minute: 30
