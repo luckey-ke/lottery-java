@@ -68,7 +68,7 @@
           </div>
         </div>
       </div>
-      <div class="table-wrap">
+      <div class="table-scroll">
         <table class="data-table">
           <thead>
             <tr>
@@ -148,7 +148,7 @@ const results = ref([])
 const totalResults = ref(0)
 const selectedType = ref('ssq')
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(100)
 
 const icons = { ssq: '🔴🔵', dlt: '🟡🔵', fc3d: '🎲', pl3: '🎯', pl5: '🎯🎯', qlc: '🎱' }
 const pageSizeOptions = [20, 100, 200, 500]
@@ -449,7 +449,15 @@ onMounted(async () => { await loadStatus(); await loadResults() })
 }
 .select:focus { border-color: var(--accent); outline: none; }
 
-.table-wrap { overflow-x: auto; }
+.table-scroll {
+  max-height: 520px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+.table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.table-scroll::-webkit-scrollbar-track { background: transparent; }
+.table-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+.table-scroll::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -463,9 +471,12 @@ onMounted(async () => { await loadStatus(); await loadResults() })
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: var(--bg);
+  background: var(--bg-card);
   border-bottom: 1px solid var(--border-light);
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 .data-table td {
   padding: 14px 20px;
