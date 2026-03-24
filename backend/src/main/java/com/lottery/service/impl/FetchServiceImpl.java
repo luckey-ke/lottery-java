@@ -41,6 +41,7 @@ public class FetchServiceImpl implements FetchService {
 
     private static final String UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
     private static final String SPORTTERY_BASE = "https://webapi.sporttery.cn/gateway/lottery/getHistoryPageListV1.qry";
+    private static final String ZHCW_JSON_BASE = "https://jc.zhcw.com/port/client_json.php";
     private static final int PAGE_SIZE = 200;
     private static final int FETCH_BATCH_SIZE = 200;
     private static final int DEFAULT_DEMO_COUNT = 100;
@@ -291,7 +292,7 @@ public class FetchServiceImpl implements FetchService {
         }
 
         FetchStats stats = switch (lotteryType) {
-            case "dlt", "pl3", "pl5" -> fetchFromSporttery(lotteryType, scope, task);
+            case "dlt", "pl3", "pl5" -> fetchFromZhcwJson(lotteryType, scope, task);
             case "ssq", "fc3d", "qlc" -> fetchFromZhcwHtml(lotteryType, scope, task);
             default -> FetchStats.failed("不支持的彩种: " + lotteryType);
         };
@@ -353,7 +354,7 @@ public class FetchServiceImpl implements FetchService {
                 if (scope.getLimitCount() != null && pageNo == 1 && scope.getLimitCount() <= PAGE_SIZE) {
                     url += "&termLimits=" + scope.getLimitCount();
                 }
-                String body = sendGet(url, true);
+                String body = sendGet(url, true, null);
                 JsonNode root = objectMapper.readTree(body);
                 JsonNode value = root.path("value");
                 JsonNode items = value.path("list");
@@ -766,6 +767,245 @@ public class FetchServiceImpl implements FetchService {
         return buildExtraInfo(salesAmount, firstPrize, secondPrize, detail);
     }
 
+    private String getZhcwLotteryId(String type) {
+        return switch (type) {
+            case "ssq" -> "50";
+            case "dlt" -> "281";
+            case "fc3d" -> "51";
+            case "pl3" -> "283";
+            case "pl5" -> "284";
+            case "qlc" -> "52";
+            default -> null;
+        };
+    }
+
+    private String getZhcwReferer(String type) {
+        return "https://www.zhcw.com/kjxx/" + type + "/";
+    }
+
+    private FetchStats fetchFromZhcwJson(String type, FetchScope scope, FetchTask task) {
+        try {
+            String lotteryId = getZhcwLotteryId(type);
+            if (lotteryId == null) {
+                return FetchStats.failed("未找到中彩网 JSON lotteryId: " + type);
+            }
+
+            FetchStats stats = new FetchStats();
+            List<LotteryResult> batch = new ArrayList<>();
+            Set<String> seen = new TreeSet<>();
+            int pageNo = 1;
+            boolean stop = false;
+            String referer = getZhcwReferer(type);
+
+            while (!stop) {
+                stats.setCurrentPage(pageNo);
+                notifyTaskProgress(task, type, stats);
+
+                long ts = System.currentTimeMillis() / 1000;
+                String url = ZHCW_JSON_BASE
+                        + "?transactionType=10001001"
+                        + "&lotteryId=" + lotteryId
+                        + "&type=0"
+                        + "&pageNum=" + pageNo
+                        + "&pageSize=" + PAGE_SIZE
+                        + "&issueCount=" + PAGE_SIZE
+                        + "&startIssue=&endIssue=&startDate=&endDate="
+                        + "&tt=" + ts
+                        + "&callback=cb";
+
+                String body = sendGet(url, true, referer);
+
+                // Strip JSONP callback wrapper if present
+                if (body.startsWith("cb(") && body.endsWith(")")) {
+                    body = body.substring(3, body.length() - 1);
+                }
+
+                JsonNode root = objectMapper.readTree(body);
+
+                // Handle different response structures
+                JsonNode dataNode = root.path("data");
+                JsonNode items;
+                if (dataNode.isObject() && dataNode.has("recordList")) {
+                    items = dataNode.path("recordList");
+                } else if (dataNode.isArray()) {
+                    items = dataNode;
+                } else if (root.has("value") && root.path("value").has("list")) {
+                    items = root.path("value").path("list");
+                } else {
+                    break;
+                }
+
+                if (!items.isArray() || items.isEmpty()) {
+                    break;
+                }
+
+                int before = stats.getTotal();
+                for (JsonNode item : items) {
+                    LotteryResult result = toZhcwJsonResult(type, item);
+                    if (result == null) {
+                        continue;
+                    }
+                    if (scope.isBeforeCutoff(result.getDrawDate())) {
+                        stop = true;
+                        break;
+                    }
+                    String key = result.getLotteryType() + "#" + result.getDrawNum();
+                    if (!seen.add(key)) {
+                        continue;
+                    }
+                    batch.add(result);
+                    stats.increaseTotal();
+                    if (batch.size() >= FETCH_BATCH_SIZE) {
+                        flushBatch(batch, stats);
+                        notifyTaskProgress(task, type, stats);
+                    }
+                    if (scope.reachedLimit(stats.getTotal())) {
+                        stop = true;
+                        break;
+                    }
+                }
+                notifyTaskProgress(task, type, stats);
+                if (stats.getTotal() == before) {
+                    break;
+                }
+
+                // Determine total pages
+                int totalPages = 0;
+                int pgSize = PAGE_SIZE;
+                if (dataNode.isObject()) {
+                    totalPages = dataNode.path("totalPage").asInt(dataNode.path("pages").asInt(0));
+                    pgSize = dataNode.path("pageSize").asInt(PAGE_SIZE);
+                } else if (root.has("value")) {
+                    JsonNode val = root.path("value");
+                    totalPages = val.path("pages").asInt(0);
+                    pgSize = val.path("pageSize").asInt(PAGE_SIZE);
+                }
+                if ((totalPages > 0 && pageNo >= totalPages) || items.size() < pgSize) {
+                    break;
+                }
+                pageNo++;
+            }
+
+            flushBatch(batch, stats);
+            notifyTaskProgress(task, type, stats);
+            if (stats.getTotal() > 0) {
+                log.info("中彩网JSON获取到 {} 条 [{}], scope={}", stats.getTotal(), type, scope.getScope());
+            }
+            return stats;
+        } catch (Exception e) {
+            log.warn("中彩网JSON请求失败 ({}): {}", type, e.getMessage(), e);
+            return FetchStats.failed(e.getMessage());
+        }
+    }
+
+    private LotteryResult toZhcwJsonResult(String type, JsonNode item) {
+        String drawNum = firstNonBlank(
+                textValue(item, "issueNo"),
+                textValue(item, "lotteryDrawNum"),
+                textValue(item, "drawNum"));
+        String drawDate = normalizeDate(firstNonBlank(
+                textValue(item, "openTime"),
+                textValue(item, "lotteryDrawTime"),
+                textValue(item, "drawDate")));
+        String drawResult = firstNonBlank(
+                textValue(item, "openCode"),
+                textValue(item, "lotteryDrawResult"),
+                textValue(item, "drawResult"));
+        if (drawNum == null || drawNum.isBlank() || drawDate == null || drawDate.isBlank()
+                || drawResult == null || drawResult.isBlank()) {
+            return null;
+        }
+
+        String numbers = formatZhcwJsonNumbers(type, drawResult);
+        if (numbers.isBlank()) {
+            return null;
+        }
+
+        LotteryResult result = new LotteryResult();
+        result.setLotteryType(type);
+        result.setDrawNum(drawNum);
+        result.setDrawDate(drawDate);
+        result.setNumbers(numbers);
+        result.setExtraInfo(buildZhcwJsonExtraInfo(type, item));
+        return result;
+    }
+
+    private String formatZhcwJsonNumbers(String type, String drawResult) {
+        String[] parts = drawResult.trim().split("\\s+");
+        return switch (type) {
+            case "dlt" -> parts.length >= 7
+                    ? pad2(parts[0]) + "," + pad2(parts[1]) + "," + pad2(parts[2]) + "," + pad2(parts[3]) + "," + pad2(parts[4])
+                    + "+" + pad2(parts[5]) + "," + pad2(parts[6])
+                    : "";
+            case "pl3" -> parts.length >= 3
+                    ? parts[0] + "," + parts[1] + "," + parts[2]
+                    : "";
+            case "pl5" -> parts.length >= 5
+                    ? parts[0] + "," + parts[1] + "," + parts[2] + "," + parts[3] + "," + parts[4]
+                    : "";
+            default -> "";
+        };
+    }
+
+    private String buildZhcwJsonExtraInfo(String type, JsonNode item) {
+        String salesAmount = firstNonBlank(
+                textValue(item, "totalSaleAmount"),
+                textValue(item, "salesAmount"));
+
+        JsonNode prizeLevelList = item.path("prizeLevelList");
+        String firstPrize = null;
+        String secondPrize = null;
+        if (prizeLevelList.isArray()) {
+            for (JsonNode prize : prizeLevelList) {
+                String prizeLevel = textValue(prize, "prizeLevel");
+                if (prizeLevel != null && !prizeLevel.isBlank()) {
+                    if (firstPrize == null && prizeLevel.contains("一")) {
+                        firstPrize = summarizeZhcwPrize(prize);
+                    } else if (secondPrize == null && prizeLevel.contains("二")) {
+                        secondPrize = summarizeZhcwPrize(prize);
+                    }
+                }
+            }
+        }
+
+        String poolBalance = firstNonBlank(
+                textValue(item, "poolBalanceAfterdraw"),
+                textValue(item, "poolBalance"));
+
+        String detail = joinNonBlank(DETAIL_SEPARATOR,
+                prefixedValue("奖池", poolBalance),
+                summarizeZhcwPrizeList(prizeLevelList, 4));
+
+        return buildExtraInfo(salesAmount, firstPrize, secondPrize, detail);
+    }
+
+    private String summarizeZhcwPrize(JsonNode prize) {
+        String prizeLevel = textValue(prize, "prizeLevel");
+        String stakeCount = firstNonBlank(textValue(prize, "stakeCount"), textValue(prize, "awardCount"));
+        String stakeAmount = firstNonBlank(textValue(prize, "stakeAmount"), textValue(prize, "awardAmount"));
+        return joinNonBlank("，",
+                blankToNull(prizeLevel),
+                suffixedValue(stakeCount, "注"),
+                suffixedValue(stakeAmount, "元/注"));
+    }
+
+    private String summarizeZhcwPrizeList(JsonNode prizeLevelList, int maxItems) {
+        if (!prizeLevelList.isArray() || prizeLevelList.isEmpty()) {
+            return null;
+        }
+        List<String> items = new ArrayList<>();
+        for (JsonNode prize : prizeLevelList) {
+            String summary = summarizeZhcwPrize(prize);
+            if (summary != null) {
+                items.add(summary);
+            }
+            if (items.size() >= maxItems) {
+                break;
+            }
+        }
+        return items.isEmpty() ? null : String.join(DETAIL_SEPARATOR, items);
+    }
+
     private FetchStats fetchFromZhcwHtml(String type, FetchScope scope, FetchTask task) {
         try {
             String pageUrlPattern = switch (type) {
@@ -789,7 +1029,7 @@ public class FetchServiceImpl implements FetchService {
                 stats.setCurrentPage(pageNo);
                 notifyTaskProgress(task, type, stats);
 
-                String html = sendGet(pageUrlPattern.formatted(pageNo), false);
+                String html = sendGet(pageUrlPattern.formatted(pageNo), false, null);
                 List<LotteryResult> pageResults = parseZhcwHtml(type, html);
                 int lastPage = extractLastPageNo(html);
                 if (pageResults.isEmpty()) {
@@ -970,13 +1210,16 @@ public class FetchServiceImpl implements FetchService {
         batch.clear();
     }
 
-    private String sendGet(String url, boolean expectJson) throws Exception {
+    private String sendGet(String url, boolean expectJson, String referer) throws Exception {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("User-Agent", UA)
                 .header("Accept", expectJson ? "application/json,text/plain,*/*" : "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 .timeout(Duration.ofSeconds(20))
                 .GET();
+        if (referer != null && !referer.isBlank()) {
+            builder.header("Referer", referer);
+        }
 
         HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
