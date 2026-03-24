@@ -51,7 +51,10 @@ public class AnalysisService {
         return switch (type) {
             case "ssq" -> trendSsq(recent);
             case "dlt" -> trendDlt(recent);
-            default -> Map.of("info", "[" + type + "] 趋势分析暂仅支持双色球和大乐透");
+            case "fc3d", "pl3" -> trendPositional(recent, type, 3);
+            case "pl5" -> trendPositional(recent, type, 5);
+            case "qlc" -> trendQlc(recent);
+            default -> Map.of("info", "[" + type + "] 趋势分析暂不支持");
         };
     }
 
@@ -229,7 +232,9 @@ public class AnalysisService {
                 "freq", freqMap,
                 "hot", topN(freq, 1, 30, 10, true),
                 "cold", topN(freq, 1, 30, 10, false),
-                "sumStats", Map.of("avg", Math.round(avg * 10) / 10.0)
+                "sumStats", Map.of("avg", Math.round(avg * 10) / 10.0,
+                        "min", sums.stream().mapToInt(Integer::intValue).min().orElse(0),
+                        "max", sums.stream().mapToInt(Integer::intValue).max().orElse(0))
         );
     }
 
@@ -244,6 +249,7 @@ public class AnalysisService {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("drawNum", row.getDrawNum());
             m.put("drawDate", row.getDrawDate());
+            m.put("numbers", row.getNumbers());
             m.put("sum", Arrays.stream(p.reds).sum());
             m.put("oddCount", (int) Arrays.stream(p.reds).filter(r -> r % 2 == 1).count());
             m.put("bigCount", (int) Arrays.stream(p.reds).filter(r -> r >= 17).count());
@@ -263,12 +269,46 @@ public class AnalysisService {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("drawNum", row.getDrawNum());
             m.put("drawDate", row.getDrawDate());
+            m.put("numbers", row.getNumbers());
             m.put("frontSum", Arrays.stream(p.front).sum());
             m.put("frontOdd", (int) Arrays.stream(p.front).filter(f -> f % 2 == 1).count());
             m.put("backSum", Arrays.stream(p.back).sum());
             trend.add(m);
         }
         return Map.of("lotteryType", "dlt", "trend", trend);
+    }
+
+    private Map<String, Object> trendPositional(List<LotteryResult> rows, String type, int positions) {
+        List<Map<String, Object>> trend = new ArrayList<>();
+        for (LotteryResult row : rows) {
+            int[] nums = parsePositional(row.getNumbers(), positions);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("drawNum", row.getDrawNum());
+            m.put("drawDate", row.getDrawDate());
+            m.put("numbers", row.getNumbers());
+            m.put("sum", Arrays.stream(nums).sum());
+            m.put("oddCount", (int) Arrays.stream(nums).filter(n -> n % 2 == 1).count());
+            m.put("bigCount", (int) Arrays.stream(nums).filter(n -> n >= 5).count());
+            m.put("positions", Arrays.stream(nums).boxed().toList());
+            trend.add(m);
+        }
+        return Map.of("lotteryType", type, "trend", trend);
+    }
+
+    private Map<String, Object> trendQlc(List<LotteryResult> rows) {
+        List<Map<String, Object>> trend = new ArrayList<>();
+        for (LotteryResult row : rows) {
+            int[] nums = parseGeneric(row.getNumbers(), 7);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("drawNum", row.getDrawNum());
+            m.put("drawDate", row.getDrawDate());
+            m.put("numbers", row.getNumbers());
+            m.put("sum", Arrays.stream(nums).sum());
+            m.put("oddCount", (int) Arrays.stream(nums).filter(n -> n % 2 == 1).count());
+            m.put("bigCount", (int) Arrays.stream(nums).filter(n -> n >= 16).count());
+            trend.add(m);
+        }
+        return Map.of("lotteryType", "qlc", "trend", trend);
     }
 
     // ============================================================
