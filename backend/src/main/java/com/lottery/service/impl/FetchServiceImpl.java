@@ -51,10 +51,28 @@ public class FetchServiceImpl implements FetchService {
     private static final int TASK_THREAD_COUNT = 4;
     private static final DateTimeFormatter TASK_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private static final Pattern ZHCW_ROW_PATTERN = Pattern.compile(
-            "(?s)<tr>\\s*<td align=\"center\">(\\d{4}-\\d{2}-\\d{2})</td>\\s*<td align=\"center\">(\\d+)</td>\\s*<td[^>]*>(.*?)</td>");
+    private static final Pattern ZHCW_ROW_PATTERN = Pattern.compile("(?is)<tr[^>]*>(.*?)</tr>");
+    private static final Pattern ZHCW_CELL_PATTERN = Pattern.compile("(?is)<t[dh][^>]*>(.*?)</t[dh]>");
     private static final Pattern EM_NUMBER_PATTERN = Pattern.compile("<em[^>]*>(\\d+)</em>");
+    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("(?is)<[^>]+>");
+    private static final Pattern TITLE_ATTR_PATTERN = Pattern.compile("(?i)title\\s*=\\s*\"([^\"]+)\"");
     private static final Pattern PAGE_NUM_PATTERN = Pattern.compile("pageNum=(\\d+)");
+    private static final Pattern DATE_PATTERN = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+    private static final Pattern DRAW_NUM_PATTERN = Pattern.compile("\\d+");
+    private static final String DETAIL_LABEL_INFO = "详细信息";
+    private static final String DETAIL_LABEL_VIDEO = "开奖视频";
+    private static final String ZHCW_SSQ_DETAIL_URL = "https://www.zhcw.com/kjxx/ssq/";
+    private static final String ZHCW_SSQ_VIDEO_URL = "https://www.zhcw.com/spzb/kjspzb/";
+    private static final String ZHCW_FC3D_DETAIL_URL = "https://www.zhcw.com/kjxx/3d/";
+    private static final String ZHCW_FC3D_VIDEO_URL = "https://www.zhcw.com/spzb/kjspzb/";
+    private static final String ZHCW_QLC_DETAIL_URL = "https://www.zhcw.com/kjxx/qlc/";
+    private static final String ZHCW_QLC_VIDEO_URL = "https://www.zhcw.com/spzb/kjspzb/";
+    private static final String EXTRA_KEY_SALES_AMOUNT = "salesAmount";
+    private static final String EXTRA_KEY_FIRST_PRIZE = "firstPrize";
+    private static final String EXTRA_KEY_SECOND_PRIZE = "secondPrize";
+    private static final String EXTRA_KEY_DETAIL = "detail";
+    private static final String DETAIL_SEPARATOR = "；";
+    private static final String SLASH_SEPARATOR = " / ";
 
     private final LotteryResultService resultService;
     private final FetchHistoryService fetchHistoryService;
@@ -407,7 +425,345 @@ public class FetchServiceImpl implements FetchService {
         result.setDrawNum(drawNum);
         result.setDrawDate(drawDate);
         result.setNumbers(numbers);
+        result.setExtraInfo(buildSportteryExtraInfo(item));
         return result;
+    }
+
+    private String buildSportteryExtraInfo(JsonNode item) {
+        String salesAmount = firstNonBlank(
+                textValue(item, "totalSaleAmount"),
+                textValue(item, "totalSaleAmountRj"));
+
+        JsonNode prizeLevelList = item.path("prizeLevelList");
+        String firstPrize = null;
+        String secondPrize = null;
+        if (prizeLevelList.isArray()) {
+            for (JsonNode prize : prizeLevelList) {
+                String prizeLevel = textValue(prize, "prizeLevel");
+                if (firstPrize == null && prizeLevel.startsWith("一等奖")) {
+                    firstPrize = summarizePrizeLevel(prize);
+                }
+                if (secondPrize == null && prizeLevel.startsWith("二等奖")) {
+                    secondPrize = summarizePrizeLevel(prize);
+                }
+            }
+        }
+
+        String detail = joinNonBlank(DETAIL_SEPARATOR,
+                prefixedValue("奖池", textValue(item, "poolBalanceAfterdraw")),
+                prefixedValue("奖金滚入", textValue(item, "drawFlowFund")),
+                summarizePrizeLevelList(prizeLevelList, 4));
+
+        return buildExtraInfo(salesAmount, firstPrize, secondPrize, detail);
+    }
+
+    private String summarizePrizeLevel(JsonNode prize) {
+        String prizeLevel = textValue(prize, "prizeLevel");
+        String stakeCount = textValue(prize, "stakeCount");
+        String stakeAmount = firstNonBlank(textValue(prize, "stakeAmount"), textValue(prize, "stakeAmountFormat"));
+        return joinNonBlank("，",
+                blankToNull(prizeLevel),
+                suffixedValue(stakeCount, "注"),
+                suffixedValue(stakeAmount, "元/注"));
+    }
+
+    private String summarizePrizeLevelList(JsonNode prizeLevelList, int maxItems) {
+        if (!prizeLevelList.isArray() || prizeLevelList.isEmpty()) {
+            return null;
+        }
+        List<String> items = new ArrayList<>();
+        for (JsonNode prize : prizeLevelList) {
+            String summary = summarizePrizeLevel(prize);
+            if (summary != null) {
+                items.add(summary);
+            }
+            if (items.size() >= maxItems) {
+                break;
+            }
+        }
+        return items.isEmpty() ? null : String.join(DETAIL_SEPARATOR, items);
+    }
+
+    private String buildExtraInfo(String salesAmount, String firstPrize, String secondPrize, Object detail) {
+        Map<String, Object> extra = new LinkedHashMap<>();
+        putIfPresent(extra, EXTRA_KEY_SALES_AMOUNT, salesAmount);
+        putIfPresent(extra, EXTRA_KEY_FIRST_PRIZE, firstPrize);
+        putIfPresent(extra, EXTRA_KEY_SECOND_PRIZE, secondPrize);
+        putIfPresent(extra, EXTRA_KEY_DETAIL, detail);
+        if (extra.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(extra);
+        } catch (Exception e) {
+            throw new IllegalStateException("extraInfo 序列化失败", e);
+        }
+    }
+
+    private void putIfPresent(Map<String, Object> target, String key, Object value) {
+        if (value == null) {
+            return;
+        }
+        if (value instanceof String text) {
+            if (!text.isBlank()) {
+                target.put(key, text);
+            }
+            return;
+        }
+        if (value instanceof Map<?, ?> mapValue && mapValue.isEmpty()) {
+            return;
+        }
+        if (value instanceof List<?> listValue && listValue.isEmpty()) {
+            return;
+        }
+        target.put(key, value);
+    }
+
+    private String textValue(JsonNode node, String fieldName) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return "";
+        }
+        JsonNode valueNode = node.path(fieldName);
+        if (valueNode.isMissingNode() || valueNode.isNull()) {
+            return "";
+        }
+        String value = valueNode.isValueNode() ? valueNode.asText("") : valueNode.toString();
+        return value == null ? "" : value.trim();
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String prefixedValue(String prefix, String value) {
+        String normalized = blankToNull(value);
+        return normalized == null ? null : prefix + normalized;
+    }
+
+    private String suffixedValue(String value, String suffix) {
+        String normalized = blankToNull(value);
+        return normalized == null ? null : normalized + suffix;
+    }
+
+    private String joinNonBlank(String delimiter, String... values) {
+        List<String> parts = new ArrayList<>();
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                parts.add(value.trim());
+            }
+        }
+        return parts.isEmpty() ? null : String.join(delimiter, parts);
+    }
+
+    private String buildDetailFromTitles(List<String> titles) {
+        List<String> filtered = new ArrayList<>();
+        for (String title : titles) {
+            if (title == null || title.isBlank()) {
+                continue;
+            }
+            if (DETAIL_LABEL_INFO.equals(title) || DETAIL_LABEL_VIDEO.equals(title)) {
+                continue;
+            }
+            filtered.add(title.trim());
+        }
+        return filtered.isEmpty() ? null : String.join(SLASH_SEPARATOR, filtered);
+    }
+
+    private String extractTitleText(String html) {
+        if (html == null || html.isBlank()) {
+            return null;
+        }
+        Matcher matcher = TITLE_ATTR_PATTERN.matcher(html);
+        List<String> titles = new ArrayList<>();
+        while (matcher.find()) {
+            String title = cleanCellText(matcher.group(1));
+            if (title != null) {
+                titles.add(title);
+            }
+        }
+        return buildDetailFromTitles(titles);
+    }
+
+    private Map<String, String> buildZhcwDetailLinks(String type) {
+        Map<String, String> links = new LinkedHashMap<>();
+        switch (type) {
+            case "ssq" -> {
+                links.put(DETAIL_LABEL_INFO, ZHCW_SSQ_DETAIL_URL);
+                links.put(DETAIL_LABEL_VIDEO, ZHCW_SSQ_VIDEO_URL);
+            }
+            case "fc3d" -> {
+                links.put(DETAIL_LABEL_INFO, ZHCW_FC3D_DETAIL_URL);
+                links.put(DETAIL_LABEL_VIDEO, ZHCW_FC3D_VIDEO_URL);
+            }
+            case "qlc" -> {
+                links.put(DETAIL_LABEL_INFO, ZHCW_QLC_DETAIL_URL);
+                links.put(DETAIL_LABEL_VIDEO, ZHCW_QLC_VIDEO_URL);
+            }
+            default -> {
+                return Map.of();
+            }
+        }
+        return links;
+    }
+
+    private Object resolveZhcwDetailValue(String type, List<String> cells, int index) {
+        Map<String, String> links = buildZhcwDetailLinks(type);
+        String extraText = firstNonBlank(cellTitleText(cells, index), cellText(cells, index));
+        if (links.isEmpty()) {
+            return extraText;
+        }
+
+        Map<String, Object> detail = new LinkedHashMap<>();
+        if (extraText != null && !extraText.isBlank()) {
+            detail.put("text", extraText);
+        }
+        detail.put("links", links);
+        return detail;
+    }
+
+    private String appendExtraDetail(String detail, String extraText) {
+        return joinNonBlank(DETAIL_SEPARATOR, detail, extraText);
+    }
+
+    private String cleanCellText(String html) {
+        if (html == null || html.isBlank()) {
+            return null;
+        }
+        String text = HTML_TAG_PATTERN.matcher(html).replaceAll(" ")
+                .replace("&nbsp;", " ")
+                .replace("&#160;", " ")
+                .replace("&amp;", "&")
+                .trim()
+                .replaceAll("\\s+", " ");
+        return text.isBlank() ? null : text;
+    }
+
+    private List<String> extractCells(String rowHtml) {
+        List<String> cells = new ArrayList<>();
+        Matcher cellMatcher = ZHCW_CELL_PATTERN.matcher(rowHtml);
+        while (cellMatcher.find()) {
+            cells.add(cellMatcher.group(1));
+        }
+        return cells;
+    }
+
+    private boolean isDataRow(List<String> cells) {
+        if (cells.size() < 3) {
+            return false;
+        }
+        String dateText = cleanCellText(cells.get(0));
+        String drawNumText = cleanCellText(cells.get(1));
+        return dateText != null && DATE_PATTERN.matcher(dateText).matches()
+                && drawNumText != null && DRAW_NUM_PATTERN.matcher(drawNumText).matches();
+    }
+
+    private String cellText(List<String> cells, int index) {
+        if (index < 0 || index >= cells.size()) {
+            return null;
+        }
+        return cleanCellText(cells.get(index));
+    }
+
+    private String cellTitleText(List<String> cells, int index) {
+        if (index < 0 || index >= cells.size()) {
+            return null;
+        }
+        return extractTitleText(cells.get(index));
+    }
+
+    private String buildZhcwExtraInfo(String type, List<String> cells) {
+        return switch (type) {
+            case "ssq", "qlc" -> buildExtraInfo(
+                    cellText(cells, 3),
+                    cellText(cells, 4),
+                    cellText(cells, 5),
+                    resolveZhcwDetailValue(type, cells, 6));
+            case "fc3d" -> buildExtraInfo(
+                    cellText(cells, 6),
+                    cellText(cells, 3),
+                    cellText(cells, 4),
+                    buildFc3dDetailValue(cells));
+            default -> null;
+        };
+    }
+
+    private Object mergeDetailValue(Object baseDetail, String extraText) {
+        String normalizedExtraText = blankToNull(extraText);
+        if (baseDetail instanceof Map<?, ?> baseMap) {
+            Map<String, Object> detailMap = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : baseMap.entrySet()) {
+                if (entry.getKey() != null) {
+                    detailMap.put(String.valueOf(entry.getKey()), entry.getValue());
+                }
+            }
+            if (normalizedExtraText != null) {
+                Object text = detailMap.get("text");
+                detailMap.put("text", joinNonBlank(DETAIL_SEPARATOR, text == null ? null : String.valueOf(text), normalizedExtraText));
+            }
+            return detailMap;
+        }
+        String baseText = baseDetail == null ? null : String.valueOf(baseDetail);
+        return appendExtraDetail(baseText, normalizedExtraText);
+    }
+
+    private Object buildFc3dDetailValue(List<String> cells) {
+        Object baseDetail = resolveZhcwDetailValue("fc3d", cells, 8);
+        String extraText = joinNonBlank(DETAIL_SEPARATOR,
+                prefixedValue("组选6:", cellText(cells, 5)),
+                prefixedValue("返奖比例:", cellText(cells, 7)));
+        return mergeDetailValue(baseDetail, extraText);
+    }
+
+    private Object buildDemoDetailValue(String type, Random rnd) {
+        Object baseDetail = switch (type) {
+            case "ssq" -> resolveZhcwDetailValue(type, List.of("", "", "", "", "", "", "模拟数据"), 6);
+            case "fc3d" -> resolveZhcwDetailValue(type, List.of("", "", "", "", "", "", "", "", "模拟数据"), 8);
+            case "qlc" -> resolveZhcwDetailValue(type, List.of("", "", "", "", "", "", "模拟数据"), 6);
+            default -> "模拟数据";
+        };
+        String extraText = switch (type) {
+            case "dlt" -> String.format("奖池%,d元", 700_000_000L + rnd.nextLong(200_000_000L));
+            case "fc3d" -> String.format("返奖比例%d%%", rnd.nextInt(50, 54));
+            default -> null;
+        };
+        return mergeDetailValue(baseDetail, extraText);
+    }
+
+    private String buildDemoExtraInfo(String type, Random rnd) {
+        String salesAmount = switch (type) {
+            case "ssq" -> String.format("%,d", 350_000_000 + rnd.nextInt(120_000_000));
+            case "dlt" -> String.format("%,d", 250_000_000 + rnd.nextInt(90_000_000));
+            case "fc3d", "pl3" -> String.format("%,d", 95_000_000 + rnd.nextInt(25_000_000));
+            case "pl5" -> String.format("%,d", 45_000_000 + rnd.nextInt(18_000_000));
+            case "qlc" -> String.format("%,d", 2_500_000 + rnd.nextInt(5_500_000));
+            default -> null;
+        };
+        String firstPrize = switch (type) {
+            case "fc3d" -> String.format("单选%s注", rnd.nextInt(0, 20));
+            case "pl3" -> String.format("直选%s注", rnd.nextInt(0, 20));
+            case "pl5" -> String.format("一等奖%s注", rnd.nextInt(0, 10));
+            default -> String.format("%s注", rnd.nextInt(0, 15));
+        };
+        String secondPrize = switch (type) {
+            case "fc3d" -> String.format("组选3%s注", rnd.nextInt(0, 30));
+            case "pl3" -> String.format("组选%s注", rnd.nextInt(0, 30));
+            case "pl5" -> String.format("二等奖%s注", rnd.nextInt(0, 20));
+            default -> String.format("%s注", rnd.nextInt(0, 200));
+        };
+        String detail = joinNonBlank(DETAIL_SEPARATOR,
+                "模拟数据",
+                type.equals("dlt") ? String.format("奖池%,d元", 700_000_000L + rnd.nextLong(200_000_000L)) : null,
+                type.equals("fc3d") ? String.format("返奖比例%d%%", rnd.nextInt(50, 54)) : null);
+        return buildExtraInfo(salesAmount, firstPrize, secondPrize, detail);
     }
 
     private FetchStats fetchFromZhcwHtml(String type, FetchScope scope, FetchTask task) {
@@ -499,12 +855,16 @@ public class FetchServiceImpl implements FetchService {
         List<LotteryResult> list = new ArrayList<>();
         Matcher rowMatcher = ZHCW_ROW_PATTERN.matcher(html);
         while (rowMatcher.find()) {
-            String drawDate = rowMatcher.group(1);
-            String drawNum = rowMatcher.group(2);
-            String numbersHtml = rowMatcher.group(3);
+            List<String> cells = extractCells(rowMatcher.group(1));
+            if (!isDataRow(cells)) {
+                continue;
+            }
+            String drawDate = cellText(cells, 0);
+            String drawNum = cellText(cells, 1);
+            String numbersHtml = cells.get(2);
             List<String> nums = extractEmNumbers(numbersHtml);
             String numbers = formatZhcwNumbers(type, nums);
-            if (numbers.isBlank()) {
+            if (drawDate == null || drawNum == null || numbers.isBlank()) {
                 continue;
             }
 
@@ -513,6 +873,7 @@ public class FetchServiceImpl implements FetchService {
             result.setDrawNum(drawNum);
             result.setDrawDate(drawDate);
             result.setNumbers(numbers);
+            result.setExtraInfo(buildZhcwExtraInfo(type, cells));
             list.add(result);
         }
         return list;
@@ -663,6 +1024,7 @@ public class FetchServiceImpl implements FetchService {
                     continue;
                 }
             }
+            result.setExtraInfo(buildDemoExtraInfo(type, rnd));
             list.add(result);
         }
         return list;

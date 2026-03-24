@@ -102,6 +102,11 @@ public class LotteryResultService {
         return mapper.findLatestDemoDrawNum(type);
     }
 
+    public LotteryResult latestRealResult(String type) {
+        List<LotteryResult> list = queryReal(type, 1, 0);
+        return list.isEmpty() ? null : list.get(0);
+    }
+
     public List<LotteryResult> allNumbers(String type) {
         return allRealNumbers(type);
     }

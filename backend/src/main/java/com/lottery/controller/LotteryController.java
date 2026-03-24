@@ -50,10 +50,12 @@ public class LotteryController {
         var types = com.lottery.entity.LotteryType.values();
         Map<String, Object> map = new LinkedHashMap<>();
         for (var t : types) {
+            var latestResult = resultService.latestRealResult(t.getCode());
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("name", t.getName());
             item.put("count", resultService.countReal(t.getCode()));
-            item.put("latestDraw", resultService.latestRealDrawNum(t.getCode()));
+            item.put("latestDraw", latestResult == null ? null : latestResult.getDrawNum());
+            item.put("latestNumbers", latestResult == null ? null : latestResult.getNumbers());
             map.put(t.getCode(), item);
         }
         return map;
