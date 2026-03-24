@@ -872,7 +872,11 @@ public class FetchServiceImpl implements FetchService {
                 // Determine total pages
                 int totalPages = 0;
                 int pgSize = PAGE_SIZE;
-                if (dataNode.isObject()) {
+                // Try root level first (zhcw JSON format)
+                if (root.has("pages")) {
+                    totalPages = root.path("pages").asInt(0);
+                    pgSize = root.path("pageSize").asInt(PAGE_SIZE);
+                } else if (dataNode.isObject()) {
                     totalPages = dataNode.path("totalPage").asInt(dataNode.path("pages").asInt(0));
                     pgSize = dataNode.path("pageSize").asInt(PAGE_SIZE);
                 } else if (root.has("value")) {
@@ -899,24 +903,16 @@ public class FetchServiceImpl implements FetchService {
     }
 
     private LotteryResult toZhcwJsonResult(String type, JsonNode item) {
-        String drawNum = firstNonBlank(
-                textValue(item, "issueNo"),
-                textValue(item, "lotteryDrawNum"),
-                textValue(item, "drawNum"));
-        String drawDate = normalizeDate(firstNonBlank(
-                textValue(item, "openTime"),
-                textValue(item, "lotteryDrawTime"),
-                textValue(item, "drawDate")));
-        String drawResult = firstNonBlank(
-                textValue(item, "openCode"),
-                textValue(item, "lotteryDrawResult"),
-                textValue(item, "drawResult"));
+        String drawNum = textValue(item, "issue");
+        String drawDate = normalizeDate(textValue(item, "openTime"));
+        String frontWinningNum = textValue(item, "frontWinningNum");
+        String backWinningNum = textValue(item, "backWinningNum");
         if (drawNum == null || drawNum.isBlank() || drawDate == null || drawDate.isBlank()
-                || drawResult == null || drawResult.isBlank()) {
+                || frontWinningNum == null || frontWinningNum.isBlank()) {
             return null;
         }
 
-        String numbers = formatZhcwJsonNumbers(type, drawResult);
+        String numbers = formatZhcwJsonNumbers(type, frontWinningNum, backWinningNum);
         if (numbers.isBlank()) {
             return null;
         }
@@ -930,72 +926,72 @@ public class FetchServiceImpl implements FetchService {
         return result;
     }
 
-    private String formatZhcwJsonNumbers(String type, String drawResult) {
-        String[] parts = drawResult.trim().split("\\s+");
+    private String formatZhcwJsonNumbers(String type, String frontWinningNum, String backWinningNum) {
+        String[] front = frontWinningNum.trim().split("\\s+");
+        String back = (backWinningNum == null || backWinningNum.isBlank()) ? "" : backWinningNum.trim();
+        String[] backArr = back.isEmpty() ? new String[0] : back.split("\\s+");
+
         return switch (type) {
-            case "dlt" -> parts.length >= 7
-                    ? pad2(parts[0]) + "," + pad2(parts[1]) + "," + pad2(parts[2]) + "," + pad2(parts[3]) + "," + pad2(parts[4])
-                    + "+" + pad2(parts[5]) + "," + pad2(parts[6])
+            case "dlt" -> front.length >= 5 && backArr.length >= 2
+                    ? pad2(front[0]) + "," + pad2(front[1]) + "," + pad2(front[2]) + "," + pad2(front[3]) + "," + pad2(front[4])
+                    + "+" + pad2(backArr[0]) + "," + pad2(backArr[1])
                     : "";
-            case "pl3" -> parts.length >= 3
-                    ? parts[0] + "," + parts[1] + "," + parts[2]
+            case "pl3" -> front.length >= 3
+                    ? front[0] + "," + front[1] + "," + front[2]
                     : "";
-            case "pl5" -> parts.length >= 5
-                    ? parts[0] + "," + parts[1] + "," + parts[2] + "," + parts[3] + "," + parts[4]
+            case "pl5" -> front.length >= 5
+                    ? front[0] + "," + front[1] + "," + front[2] + "," + front[3] + "," + front[4]
                     : "";
             default -> "";
         };
     }
 
     private String buildZhcwJsonExtraInfo(String type, JsonNode item) {
-        String salesAmount = firstNonBlank(
-                textValue(item, "totalSaleAmount"),
-                textValue(item, "salesAmount"));
+        String salesAmount = textValue(item, "saleMoney");
+        String poolMoney = textValue(item, "prizePoolMoney");
 
-        JsonNode prizeLevelList = item.path("prizeLevelList");
+        JsonNode winnerDetails = item.path("winnerDetails");
         String firstPrize = null;
         String secondPrize = null;
-        if (prizeLevelList.isArray()) {
-            for (JsonNode prize : prizeLevelList) {
-                String prizeLevel = textValue(prize, "prizeLevel");
-                if (prizeLevel != null && !prizeLevel.isBlank()) {
-                    if (firstPrize == null && prizeLevel.contains("一")) {
-                        firstPrize = summarizeZhcwPrize(prize);
-                    } else if (secondPrize == null && prizeLevel.contains("二")) {
-                        secondPrize = summarizeZhcwPrize(prize);
-                    }
+        if (winnerDetails.isArray()) {
+            for (JsonNode detail : winnerDetails) {
+                String awardEtc = textValue(detail, "awardEtc");
+                if ("1".equals(awardEtc)) {
+                    firstPrize = summarizeWinnerDetail(detail);
+                } else if ("2".equals(awardEtc)) {
+                    secondPrize = summarizeWinnerDetail(detail);
                 }
             }
         }
 
-        String poolBalance = firstNonBlank(
-                textValue(item, "poolBalanceAfterdraw"),
-                textValue(item, "poolBalance"));
-
         String detail = joinNonBlank(DETAIL_SEPARATOR,
-                prefixedValue("奖池", poolBalance),
-                summarizeZhcwPrizeList(prizeLevelList, 4));
+                prefixedValue("奖池", poolMoney),
+                summarizeWinnerDetailsList(winnerDetails, 4));
 
         return buildExtraInfo(salesAmount, firstPrize, secondPrize, detail);
     }
 
-    private String summarizeZhcwPrize(JsonNode prize) {
-        String prizeLevel = textValue(prize, "prizeLevel");
-        String stakeCount = firstNonBlank(textValue(prize, "stakeCount"), textValue(prize, "awardCount"));
-        String stakeAmount = firstNonBlank(textValue(prize, "stakeAmount"), textValue(prize, "awardAmount"));
+    private String summarizeWinnerDetail(JsonNode detail) {
+        String awardEtc = textValue(detail, "awardEtc");
+        JsonNode baseBetWinner = detail.path("baseBetWinner");
+        String remark = textValue(baseBetWinner, "remark");
+        String awardNum = textValue(baseBetWinner, "awardNum");
+        String awardMoney = textValue(baseBetWinner, "awardMoney");
+
+        String label = (remark != null && !remark.isBlank()) ? remark : (awardEtc + "等奖");
         return joinNonBlank("，",
-                blankToNull(prizeLevel),
-                suffixedValue(stakeCount, "注"),
-                suffixedValue(stakeAmount, "元/注"));
+                blankToNull(label),
+                suffixedValue(awardNum, "注"),
+                suffixedValue(awardMoney, "元/注"));
     }
 
-    private String summarizeZhcwPrizeList(JsonNode prizeLevelList, int maxItems) {
-        if (!prizeLevelList.isArray() || prizeLevelList.isEmpty()) {
+    private String summarizeWinnerDetailsList(JsonNode winnerDetails, int maxItems) {
+        if (!winnerDetails.isArray() || winnerDetails.isEmpty()) {
             return null;
         }
         List<String> items = new ArrayList<>();
-        for (JsonNode prize : prizeLevelList) {
-            String summary = summarizeZhcwPrize(prize);
+        for (JsonNode detail : winnerDetails) {
+            String summary = summarizeWinnerDetail(detail);
             if (summary != null) {
                 items.add(summary);
             }
