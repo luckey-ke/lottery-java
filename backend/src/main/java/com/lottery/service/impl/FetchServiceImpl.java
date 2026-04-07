@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -44,7 +43,6 @@ public class FetchServiceImpl implements FetchService {
     private static final String ZHCW_JSON_BASE = "https://jc.zhcw.com/port/client_json.php";
     private static final int PAGE_SIZE = 200;
     private static final int FETCH_BATCH_SIZE = 200;
-    private static final int DEFAULT_DEMO_COUNT = 100;
     private static final long ZHCW_PAGE_DELAY_MS = 1200;
     private static final long ZHCW_RETRY_DELAY_MS = 2000;
     private static final int ZHCW_MAX_EMPTY_RETRIES = 3;
@@ -146,61 +144,6 @@ public class FetchServiceImpl implements FetchService {
     @Override
     public Map<String, Object> getFetchHistory(String taskId) {
         return fetchHistoryService.detail(taskId);
-    }
-
-    @Override
-    public Map<String, Object> fetchAllDemo(int count) {
-        int demoCount = count > 0 ? count : DEFAULT_DEMO_COUNT;
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("count", demoCount);
-
-        int totalFetched = 0;
-        int inserted = 0;
-        int updated = 0;
-        boolean hasError = false;
-
-        for (LotteryType lotteryType : LotteryType.values()) {
-            try {
-                Map<String, Object> result = fetchDemo(lotteryType.getCode(), demoCount);
-                summary.put(lotteryType.getCode(), result);
-                totalFetched += asInt(result.get("totalFetched"));
-                inserted += asInt(result.get("inserted"));
-                updated += asInt(result.get("updated"));
-                hasError = hasError || "failed".equals(result.get("status"));
-            } catch (Exception e) {
-                hasError = true;
-                summary.put(lotteryType.getCode(), buildErrorResult(lotteryType.getCode(), "demo", e.getMessage()));
-                log.error("生成 demo [{}] 异常: {}", lotteryType.getCode(), e.getMessage(), e);
-            }
-        }
-
-        summary.put("status", hasError ? "partial_failed" : "success");
-        summary.put("totalFetched", totalFetched);
-        summary.put("inserted", inserted);
-        summary.put("updated", updated);
-        summary.put("total", totalFetched);
-        summary.put("new", inserted);
-        return summary;
-    }
-
-    @Override
-    public Map<String, Object> fetchDemo(String lotteryType, int count) {
-        int demoCount = count > 0 ? count : DEFAULT_DEMO_COUNT;
-        FetchStats stats = new FetchStats();
-        stats.setCurrentPage(1);
-
-        try {
-            List<LotteryResult> results = generateDemo(lotteryType, demoCount);
-            for (LotteryResult result : results) {
-                stats.increaseTotal();
-                stats.recordSaveOutcome(resultService.saveDemo(result));
-            }
-            log.info("[{}] 演示数据完成: 生成 {} 条, 新增 {} 条, 更新 {} 条", lotteryType, results.size(), stats.getInsertedCount(), stats.getUpdatedCount());
-            return buildFetchResult(lotteryType, "demo", stats);
-        } catch (Exception e) {
-            log.warn("[{}] 演示数据生成失败: {}", lotteryType, e.getMessage(), e);
-            return buildFetchResult(lotteryType, "demo", FetchStats.failed(e.getMessage()));
-        }
     }
 
     @Override
@@ -724,49 +667,6 @@ public class FetchServiceImpl implements FetchService {
         return mergeDetailValue(baseDetail, extraText);
     }
 
-    private Object buildDemoDetailValue(String type, Random rnd) {
-        Object baseDetail = switch (type) {
-            case "ssq" -> resolveZhcwDetailValue(type, List.of("", "", "", "", "", "", "模拟数据"), 6);
-            case "fc3d" -> resolveZhcwDetailValue(type, List.of("", "", "", "", "", "", "", "", "模拟数据"), 8);
-            case "qlc" -> resolveZhcwDetailValue(type, List.of("", "", "", "", "", "", "模拟数据"), 6);
-            default -> "模拟数据";
-        };
-        String extraText = switch (type) {
-            case "dlt" -> String.format("奖池%,d元", 700_000_000L + rnd.nextLong(200_000_000L));
-            case "fc3d" -> String.format("返奖比例%d%%", rnd.nextInt(50, 54));
-            default -> null;
-        };
-        return mergeDetailValue(baseDetail, extraText);
-    }
-
-    private String buildDemoExtraInfo(String type, Random rnd) {
-        String salesAmount = switch (type) {
-            case "ssq" -> String.format("%,d", 350_000_000 + rnd.nextInt(120_000_000));
-            case "dlt" -> String.format("%,d", 250_000_000 + rnd.nextInt(90_000_000));
-            case "fc3d", "pl3" -> String.format("%,d", 95_000_000 + rnd.nextInt(25_000_000));
-            case "pl5" -> String.format("%,d", 45_000_000 + rnd.nextInt(18_000_000));
-            case "qlc" -> String.format("%,d", 2_500_000 + rnd.nextInt(5_500_000));
-            default -> null;
-        };
-        String firstPrize = switch (type) {
-            case "fc3d" -> String.format("单选%s注", rnd.nextInt(0, 20));
-            case "pl3" -> String.format("直选%s注", rnd.nextInt(0, 20));
-            case "pl5" -> String.format("一等奖%s注", rnd.nextInt(0, 10));
-            default -> String.format("%s注", rnd.nextInt(0, 15));
-        };
-        String secondPrize = switch (type) {
-            case "fc3d" -> String.format("组选3%s注", rnd.nextInt(0, 30));
-            case "pl3" -> String.format("组选%s注", rnd.nextInt(0, 30));
-            case "pl5" -> String.format("二等奖%s注", rnd.nextInt(0, 20));
-            default -> String.format("%s注", rnd.nextInt(0, 200));
-        };
-        String detail = joinNonBlank(DETAIL_SEPARATOR,
-                "模拟数据",
-                type.equals("dlt") ? String.format("奖池%,d元", 700_000_000L + rnd.nextLong(200_000_000L)) : null,
-                type.equals("fc3d") ? String.format("返奖比例%d%%", rnd.nextInt(50, 54)) : null);
-        return buildExtraInfo(salesAmount, firstPrize, secondPrize, detail);
-    }
-
     private String getZhcwLotteryId(String type) {
         return switch (type) {
             case "ssq" -> "50";
@@ -1222,82 +1122,6 @@ public class FetchServiceImpl implements FetchService {
             throw new IllegalStateException("HTTP " + response.statusCode());
         }
         return response.body();
-    }
-
-    @Override
-    public List<LotteryResult> generateDemo(String type, int count) {
-        Random rnd = new Random();
-        List<LotteryResult> list = new ArrayList<>();
-        LocalDate today = LocalDate.now();
-
-        for (int i = 0; i < count; i++) {
-            LocalDate dateValue = today.minusDays(i);
-            String date = dateValue.format(DateTimeFormatter.ISO_LOCAL_DATE);
-            String drawNum = dateValue.getYear() + String.format("%03d", count - i);
-
-            LotteryResult result = new LotteryResult();
-            result.setLotteryType(type);
-            result.setDrawNum(drawNum);
-            result.setDrawDate(date);
-
-            switch (type) {
-                case "ssq" -> {
-                    List<Integer> reds = randomSorted(rnd, 34, 6);
-                    int blue = rnd.nextInt(1, 17);
-                    result.setNumbers(fmt(reds) + "+" + fmt2(blue));
-                }
-                case "dlt" -> {
-                    List<Integer> fronts = randomSorted(rnd, 36, 5);
-                    List<Integer> backs = randomSorted(rnd, 13, 2);
-                    result.setNumbers(fmt(fronts) + "+" + fmt(backs));
-                }
-                case "fc3d", "pl3" -> result.setNumbers(rnd.nextInt(10) + "," + rnd.nextInt(10) + "," + rnd.nextInt(10));
-                case "pl5" -> result.setNumbers(rnd.nextInt(10) + "," + rnd.nextInt(10) + "," + rnd.nextInt(10) +
-                        "," + rnd.nextInt(10) + "," + rnd.nextInt(10));
-                case "qlc" -> {
-                    List<Integer> nums = randomSorted(rnd, 31, 7);
-                    int special = randomSpecialExcluding(rnd, 31, nums);
-                    result.setNumbers(fmt(nums) + "+" + fmt2(special));
-                }
-                default -> {
-                    continue;
-                }
-            }
-            result.setExtraInfo(buildDemoExtraInfo(type, rnd));
-            list.add(result);
-        }
-        return list;
-    }
-
-    private List<Integer> randomSorted(Random rnd, int maxExclusive, int count) {
-        Set<Integer> set = new TreeSet<>();
-        while (set.size() < count) {
-            set.add(rnd.nextInt(1, maxExclusive));
-        }
-        return new ArrayList<>(set);
-    }
-
-    private int randomSpecialExcluding(Random rnd, int maxExclusive, List<Integer> existing) {
-        int value;
-        do {
-            value = rnd.nextInt(1, maxExclusive);
-        } while (existing.contains(value));
-        return value;
-    }
-
-    private String fmt(List<Integer> nums) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < nums.size(); i++) {
-            if (i > 0) {
-                sb.append(",");
-            }
-            sb.append(String.format("%02d", nums.get(i)));
-        }
-        return sb.toString();
-    }
-
-    private String fmt2(int n) {
-        return String.format("%02d", n);
     }
 
     private Map<String, Object> buildFetchResult(String lotteryType, String scope, FetchStats stats) {

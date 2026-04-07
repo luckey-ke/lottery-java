@@ -18,7 +18,6 @@ public class SchemaMigrationRunner {
     @PostConstruct
     public void migrate() {
         ensureAuditColumns("lottery_result");
-        ensureAuditColumns("lottery_demo_result");
         ensureFetchHistoryTaskTable();
         ensureFetchHistoryDetailTable();
         ensureFetchHistoryIndexes();

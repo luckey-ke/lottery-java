@@ -23,18 +23,8 @@ public class LotteryResultService {
     private final Object saveLock = new Object();
 
     public SaveOutcome saveReal(LotteryResult result) {
-        return save(result, false);
-    }
-
-    public SaveOutcome saveDemo(LotteryResult result) {
-        return save(result, true);
-    }
-
-    private SaveOutcome save(LotteryResult result, boolean demo) {
         synchronized (saveLock) {
-            boolean exists = demo
-                    ? mapper.existsDemo(result.getLotteryType(), result.getDrawNum()) > 0
-                    : mapper.existsReal(result.getLotteryType(), result.getDrawNum()) > 0;
+            boolean exists = mapper.existsReal(result.getLotteryType(), result.getDrawNum()) > 0;
 
             String now = LocalDateTime.now().format(AUDIT_TIME_FORMATTER);
             result.setFetchedAt(now);
@@ -45,11 +35,7 @@ public class LotteryResultService {
                 result.setCreatedBy(CREATED_BY);
             }
 
-            if (demo) {
-                mapper.upsertDemo(result);
-            } else {
-                mapper.upsertReal(result);
-            }
+            mapper.upsertReal(result);
             return exists ? SaveOutcome.UPDATED : SaveOutcome.INSERTED;
         }
     }
@@ -65,13 +51,6 @@ public class LotteryResultService {
         return mapper.findByType(type, limit, offset);
     }
 
-    public List<LotteryResult> queryDemo(String type, int limit, int offset) {
-        if (type == null || type.isBlank()) {
-            return mapper.findAllDemo(limit, offset);
-        }
-        return mapper.findDemoByType(type, limit, offset);
-    }
-
     public int count(String type) {
         return countReal(type);
     }
@@ -83,23 +62,12 @@ public class LotteryResultService {
         return mapper.countByType(type);
     }
 
-    public int countDemo(String type) {
-        if (type == null || type.isBlank()) {
-            return mapper.countAllDemo();
-        }
-        return mapper.countDemoByType(type);
-    }
-
     public String latestDrawNum(String type) {
         return latestRealDrawNum(type);
     }
 
     public String latestRealDrawNum(String type) {
         return mapper.findLatestDrawNum(type);
-    }
-
-    public String latestDemoDrawNum(String type) {
-        return mapper.findLatestDemoDrawNum(type);
     }
 
     public LotteryResult latestRealResult(String type) {
@@ -113,10 +81,6 @@ public class LotteryResultService {
 
     public List<LotteryResult> allRealNumbers(String type) {
         return mapper.findAllNumbers(type);
-    }
-
-    public List<LotteryResult> allDemoNumbers(String type) {
-        return mapper.findAllDemoNumbers(type);
     }
 
     public enum SaveOutcome {

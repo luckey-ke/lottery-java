@@ -134,7 +134,7 @@
     <div class="empty-hero" v-else-if="!Object.keys(status).length">
       <span class="empty-hero-icon">🎰</span>
       <h3>还没有数据</h3>
-      <p>点击上方「演示数据」按钮生成示例数据，或前往管理后台拉取真实数据</p>
+      <p>前往管理后台拉取数据后即可查看</p>
     </div>
   </div>
 </template>

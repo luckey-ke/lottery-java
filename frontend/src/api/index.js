@@ -18,9 +18,6 @@ export default {
   fetchTask: (taskId) => api.get(`/fetch/tasks/${taskId}`),
   fetchHistory: (params = {}) => api.get('/fetch/history', { params: withParams(params) }),
   fetchHistoryDetail: (taskId) => api.get(`/fetch/history/${taskId}`),
-  // 生成演示数据
-  fetchDemoAll: (count = 100) => api.post('/demo/fetch', null, { params: { count } }),
-  fetchDemoOne: (type, count = 100) => api.post(`/demo/fetch/${type}`, null, { params: { count } }),
   // 分析
   analyze: (type) => api.get('/analyze', { params: { type } }),
   analyzeAll: () => api.get('/analyze'),

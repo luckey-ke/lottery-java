@@ -16,24 +16,6 @@ CREATE TABLE IF NOT EXISTS lottery_result (
 CREATE INDEX IF NOT EXISTS idx_type_date ON lottery_result(lottery_type, draw_date);
 CREATE INDEX IF NOT EXISTS idx_type_draw ON lottery_result(lottery_type, draw_num);
 
-CREATE TABLE IF NOT EXISTS lottery_demo_result (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    lottery_type TEXT    NOT NULL,
-    draw_num     TEXT    NOT NULL,
-    draw_date    TEXT    NOT NULL,
-    numbers      TEXT    NOT NULL,
-    extra_info   TEXT,
-    fetched_at   TEXT    DEFAULT (datetime('now','localtime')),
-    created_at   TEXT,
-    created_by   TEXT,
-    updated_at   TEXT,
-    updated_by   TEXT,
-    UNIQUE(lottery_type, draw_num)
-);
-
-CREATE INDEX IF NOT EXISTS idx_demo_type_date ON lottery_demo_result(lottery_type, draw_date);
-CREATE INDEX IF NOT EXISTS idx_demo_type_draw ON lottery_demo_result(lottery_type, draw_num);
-
 CREATE TABLE IF NOT EXISTS fetch_history_task (
     task_id         TEXT PRIMARY KEY,
     trigger_source  TEXT    NOT NULL,

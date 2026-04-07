@@ -101,21 +101,6 @@ public class LotteryController {
         return fetchService.getFetchHistory(taskId);
     }
 
-    /** 生成全部演示数据 */
-    @PostMapping("/demo/fetch")
-    public Map<String, Object> fetchAllDemo(
-            @RequestParam(defaultValue = "100") int count) {
-        return fetchService.fetchAllDemo(count);
-    }
-
-    /** 生成指定彩种演示数据 */
-    @PostMapping("/demo/fetch/{type}")
-    public Map<String, Object> fetchOneDemo(
-            @PathVariable String type,
-            @RequestParam(defaultValue = "100") int count) {
-        return fetchService.fetchDemo(type, count);
-    }
-
     /** 频率统计分析 */
     @GetMapping("/analyze")
     public Object analyze(@RequestParam(required = false) String type) {

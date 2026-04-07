@@ -25,11 +25,6 @@
           </router-link>
         </nav>
         <div class="header-actions">
-          <button class="btn-demo" @click="fetchDemo" :disabled="demoLoading">
-            <span v-if="demoLoading" class="spinner"></span>
-            <span v-else>🎲</span>
-            {{ demoLoading ? '生成中...' : '演示数据' }}
-          </button>
         </div>
       </div>
     </header>
@@ -52,29 +47,9 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useRoute } from 'vue-router'
-import api from './api'
 
-const route = useRoute()
-const demoLoading = ref(false)
 const message = ref('')
 const messageType = ref('success')
-
-async function fetchDemo() {
-  demoLoading.value = true
-  message.value = ''
-  try {
-    await api.fetchDemoAll(100)
-    message.value = '演示数据生成完成！'
-    messageType.value = 'success'
-  } catch (e) {
-    message.value = '生成失败: ' + (e.response?.data?.message || e.message)
-    messageType.value = 'error'
-  } finally {
-    demoLoading.value = false
-    setTimeout(() => { message.value = '' }, 4000)
-  }
-}
 </script>
 
 <style>
@@ -196,39 +171,11 @@ body {
 }
 .nav-icon { font-size: 15px; }
 
-/* Demo Button */
-.btn-demo {
+.header-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: var(--radius);
-  border: none;
-  background: linear-gradient(135deg, var(--accent), var(--purple));
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: var(--font);
-  white-space: nowrap;
+  gap: 8px;
 }
-.btn-demo:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99,102,241,0.4);
-}
-.btn-demo:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Main */
 .main {
