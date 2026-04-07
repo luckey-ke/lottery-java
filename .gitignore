@@ -5,5 +5,5 @@
 *.log
 .DS_Store
 Thumbs.db
-data/*.db
+bu pai chu zhe ge -- data/*.db
 .claude/
