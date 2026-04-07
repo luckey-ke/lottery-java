@@ -18,11 +18,26 @@
     </div>
 
     <div v-if="data && !data.error">
-      <div class="date-badge">
-        <span>📅</span> {{ data.date }} · {{ data.name }} · 每日推荐
+      <div class="action-bar">
+        <div class="date-badge">
+          <span>📅</span> {{ data.date }} · {{ data.name }} · 每日推荐
+        </div>
+        <div class="export-btns">
+          <button class="btn-export" @click="copyText">
+            <span>📋</span> {{ copied ? '已复制' : '复制文本' }}
+          </button>
+          <button class="btn-export" @click="downloadText">
+            <span>📄</span> 导出文本
+          </button>
+          <button class="btn-export primary" @click="generateImage" :disabled="generating">
+            <span v-if="generating" class="spinner-sm"></span>
+            <span v-else>🖼️</span>
+            {{ generating ? '生成中...' : '生成图片' }}
+          </button>
+        </div>
       </div>
 
-      <div class="groups-grid">
+      <div class="groups-grid" ref="cardsContainer">
         <div
           v-for="(group, i) in data.groups"
           :key="i"
@@ -84,6 +99,9 @@
       <h3>选择彩种查看推荐</h3>
       <p>点击上方彩种标签加载每日推荐号码</p>
     </div>
+
+    <!-- 隐藏的图片预览 -->
+    <canvas ref="canvasEl" style="display:none"></canvas>
   </div>
 </template>
 
@@ -104,6 +122,10 @@ const strategyIcons = ['⚖️', '🔥', '❄️', '📊', '🎲']
 
 const selectedType = ref('ssq')
 const data = ref(null)
+const copied = ref(false)
+const generating = ref(false)
+const canvasEl = ref(null)
+const cardsContainer = ref(null)
 
 async function loadRecommend() {
   data.value = null
@@ -112,6 +134,244 @@ async function loadRecommend() {
     data.value = res
   } catch (e) {
     data.value = { error: e.message }
+  }
+}
+
+// ========== 导出文本 ==========
+function buildTextContent() {
+  if (!data.value) return ''
+  const lines = []
+  lines.push(`${data.value.name} 每日推荐 - ${data.value.date}`)
+  lines.push('='.repeat(36))
+  lines.push('')
+  data.value.groups.forEach((g, i) => {
+    lines.push(`${strategyIcons[i]} ${g.strategy}`)
+    lines.push(`  ${g.display}`)
+    lines.push('')
+  })
+  lines.push('⚠️ 以上推荐基于历史统计分析，仅供参考娱乐，不构成任何购买建议。')
+  return lines.join('\n')
+}
+
+async function copyText() {
+  try {
+    await navigator.clipboard.writeText(buildTextContent())
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  } catch {
+    // fallback
+    const ta = document.createElement('textarea')
+    ta.value = buildTextContent()
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  }
+}
+
+function downloadText() {
+  const text = buildTextContent()
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${data.value.name}_推荐_${data.value.date}.txt`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// ========== 生成图片 ==========
+function getGroupNumbers(group) {
+  const t = selectedType.value
+  if (t === 'ssq') return { main: group.reds, extra: group.blues, mainColor: '#ef4444', extraColor: '#3b82f6' }
+  if (t === 'dlt') return { main: group.fronts, extra: group.backs, mainColor: '#f59e0b', extraColor: '#3b82f6' }
+  if (['fc3d', 'pl3', 'pl5'].includes(t)) return { main: group.digits, extra: null, mainColor: '#8b5cf6', extraColor: null }
+  if (t === 'qlc') return { main: group.numbers, extra: null, mainColor: '#8b5cf6', extraColor: null }
+  return { main: [], extra: null, mainColor: '#666', extraColor: null }
+}
+
+function drawBall(ctx, x, y, radius, text, color) {
+  // gradient ball
+  const grad = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, radius * 0.1, x, y, radius)
+  grad.addColorStop(0, lightenColor(color, 30))
+  grad.addColorStop(1, color)
+  ctx.beginPath()
+  ctx.arc(x, y, radius, 0, Math.PI * 2)
+  ctx.fillStyle = grad
+  ctx.fill()
+
+  // text
+  ctx.fillStyle = '#fff'
+  ctx.font = `bold ${radius * 0.9}px "Inter", -apple-system, "PingFang SC", sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(text, x, y + 1)
+}
+
+function lightenColor(hex, percent) {
+  const num = parseInt(hex.slice(1), 16)
+  const r = Math.min(255, (num >> 16) + percent)
+  const g = Math.min(255, ((num >> 8) & 0xff) + percent)
+  const b = Math.min(255, (num & 0xff) + percent)
+  return `rgb(${r},${g},${b})`
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.lineTo(x + w - r, y)
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+  ctx.lineTo(x + w, y + h - r)
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+  ctx.lineTo(x + r, y + h)
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+  ctx.lineTo(x, y + r)
+  ctx.quadraticCurveTo(x, y, x + r, y)
+  ctx.closePath()
+}
+
+async function generateImage() {
+  if (!data.value) return
+  generating.value = true
+
+  await new Promise(r => setTimeout(r, 50))
+
+  try {
+    const canvas = canvasEl.value
+    const ctx = canvas.getContext('2d')
+    const dpr = 2 // 高清
+
+    const W = 800
+    const groups = data.value.groups
+    const cardH = 120
+    const padding = 32
+    const headerH = 100
+    const footerH = 60
+    const gap = 16
+    const H = padding + headerH + groups.length * (cardH + gap) + footerH + padding
+
+    canvas.width = W * dpr
+    canvas.height = H * dpr
+    ctx.scale(dpr, dpr)
+
+    // Background
+    ctx.fillStyle = '#f5f7fa'
+    ctx.fillRect(0, 0, W, H)
+
+    // Header area
+    roundRect(ctx, padding, padding, W - padding * 2, headerH - 8, 16)
+    ctx.fillStyle = '#6366f1'
+    ctx.fill()
+
+    // Title
+    ctx.fillStyle = '#fff'
+    ctx.font = 'bold 28px "Inter", -apple-system, "PingFang SC", sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    ctx.fillText(`🎯 ${data.value.name} 每日推荐`, padding + 24, padding + 20)
+
+    // Date & subtitle
+    ctx.font = '15px "Inter", -apple-system, "PingFang SC", sans-serif'
+    ctx.fillStyle = 'rgba(255,255,255,0.8)'
+    ctx.fillText(`${data.date}  ·  基于历史数据与统计分析`, padding + 24, padding + 58)
+
+    // Cards
+    const cardY0 = padding + headerH
+    const cardW = W - padding * 2
+    const ballR = 18
+    const ballGap = 8
+
+    groups.forEach((group, i) => {
+      const cy = cardY0 + i * (cardH + gap)
+
+      // Card background
+      roundRect(ctx, padding, cy, cardW, cardH, 12)
+      ctx.fillStyle = i === 0 ? '#faf5ff' : '#fff'
+      ctx.fill()
+      ctx.strokeStyle = i === 0 ? '#6366f1' : '#e8ecf1'
+      ctx.lineWidth = i === 0 ? 2 : 1
+      ctx.stroke()
+
+      // Strategy label
+      ctx.fillStyle = '#1a1d23'
+      ctx.font = 'bold 15px "Inter", -apple-system, "PingFang SC", sans-serif'
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'top'
+      ctx.fillText(`${strategyIcons[i]} ${group.strategy}`, padding + 20, cy + 16)
+
+      // "推荐" tag
+      if (i === 0) {
+        const tagX = padding + cardW - 70
+        roundRect(ctx, tagX, cy + 14, 50, 22, 11)
+        ctx.fillStyle = '#eef2ff'
+        ctx.fill()
+        ctx.fillStyle = '#6366f1'
+        ctx.font = 'bold 11px "Inter", -apple-system, "PingFang SC", sans-serif'
+        ctx.textAlign = 'center'
+        ctx.fillText('推荐', tagX + 25, cy + 20)
+      }
+
+      // Balls
+      const nums = getGroupNumbers(group)
+      const ballY = cy + 68
+      let ballX = padding + 28
+
+      nums.main.forEach(n => {
+        drawBall(ctx, ballX, ballY, ballR, n, nums.mainColor)
+        ballX += ballR * 2 + ballGap
+      })
+
+      if (nums.extra && nums.extra.length) {
+        // "+" separator
+        ctx.fillStyle = '#9ca3af'
+        ctx.font = 'bold 16px sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText('+', ballX + 4, ballY)
+        ballX += ballR + ballGap + 4
+
+        nums.extra.forEach(n => {
+          drawBall(ctx, ballX, ballY, ballR, n, nums.extraColor)
+          ballX += ballR * 2 + ballGap
+        })
+      }
+
+      // Display text
+      ctx.fillStyle = '#9ca3af'
+      ctx.font = '12px monospace'
+      ctx.textAlign = 'right'
+      ctx.textBaseline = 'bottom'
+      ctx.fillText(group.display, padding + cardW - 20, cy + cardH - 10)
+    })
+
+    // Footer disclaimer
+    const fy = cardY0 + groups.length * (cardH + gap) + 12
+    ctx.fillStyle = '#92400e'
+    ctx.font = '12px "Inter", -apple-system, "PingFang SC", sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+    ctx.fillText('⚠️ 以上推荐基于历史统计分析，仅供参考娱乐，不构成任何购买建议。', W / 2, fy + 8)
+
+    // Watermark
+    ctx.fillStyle = '#d1d5db'
+    ctx.font = '11px "Inter", -apple-system, "PingFang SC", sans-serif'
+    ctx.fillText('LotteryLab · lottery-java', W / 2, fy + 30)
+
+    // Download
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${data.value.name}_推荐_${data.value.date}.png`
+      a.click()
+      URL.revokeObjectURL(url)
+      generating.value = false
+    }, 'image/png')
+  } catch (e) {
+    console.error('Image generation failed:', e)
+    generating.value = false
   }
 }
 
@@ -140,12 +400,43 @@ onMounted(() => loadRecommend())
   box-shadow: 0 2px 8px rgba(99,102,241,0.3);
 }
 
+/* Action Bar */
+.action-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 24px; gap: 16px; flex-wrap: wrap;
+}
 .date-badge {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 10px 18px; border-radius: var(--radius);
   background: var(--accent-bg); color: var(--accent);
-  font-size: 14px; font-weight: 600; margin-bottom: 24px;
+  font-size: 14px; font-weight: 600;
 }
+.export-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-export {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--bg-card);
+  color: var(--text-secondary); font-size: 13px; font-weight: 500;
+  cursor: pointer; font-family: var(--font); transition: all 0.2s;
+}
+.btn-export:hover { border-color: var(--accent); color: var(--accent); }
+.btn-export:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-export.primary {
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  color: #fff; border: none;
+}
+.btn-export.primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99,102,241,0.4);
+}
+
+.spinner-sm {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff; border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .groups-grid {
   display: grid;
@@ -218,6 +509,7 @@ onMounted(() => loadRecommend())
 
 @media (max-width: 768px) {
   .page-hero { flex-direction: column; align-items: flex-start; }
+  .action-bar { flex-direction: column; align-items: flex-start; }
   .groups-grid { grid-template-columns: 1fr; }
 }
 </style>
