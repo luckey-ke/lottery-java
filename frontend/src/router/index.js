@@ -6,6 +6,7 @@ const routes = [
   { path: '/history', name: 'FetchHistory', component: () => import('../views/FetchHistory.vue') },
   { path: '/analysis', name: 'Analysis', component: () => import('../views/Analysis.vue') },
   { path: '/trend', name: 'Trend', component: () => import('../views/Trend.vue') },
+  { path: '/recommend', name: 'Recommend', component: () => import('../views/Recommend.vue') },
 ]
 
 export default createRouter({

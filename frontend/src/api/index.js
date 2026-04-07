@@ -22,4 +22,5 @@ export default {
   analyze: (type) => api.get('/analyze', { params: { type } }),
   analyzeAll: () => api.get('/analyze'),
   trend: (type, n = 30) => api.get('/trend', { params: { type, n } }),
+  recommend: (type) => api.get('/recommend', { params: { type } }),
 }

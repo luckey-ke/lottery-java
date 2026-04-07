@@ -23,6 +23,9 @@
           <router-link to="/trend" class="nav-item" active-class="active">
             <span class="nav-icon">🔥</span> 趋势
           </router-link>
+          <router-link to="/recommend" class="nav-item" active-class="active">
+            <span class="nav-icon">🎯</span> 推荐
+          </router-link>
         </nav>
         <div class="header-actions">
         </div>

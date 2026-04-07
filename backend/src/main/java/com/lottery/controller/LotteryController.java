@@ -3,6 +3,7 @@ package com.lottery.controller;
 import com.lottery.service.AnalysisService;
 import com.lottery.service.FetchService;
 import com.lottery.service.LotteryResultService;
+import com.lottery.service.RecommendationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,6 +23,7 @@ public class LotteryController {
     private final LotteryResultService resultService;
     private final FetchService fetchService;
     private final AnalysisService analysisService;
+    private final RecommendationService recommendationService;
 
     /** 查询开奖记录 */
     @GetMapping("/results")
@@ -116,5 +118,11 @@ public class LotteryController {
             @RequestParam String type,
             @RequestParam(defaultValue = "30") int n) {
         return analysisService.trend(type, n);
+    }
+
+    /** 每日号码推荐 */
+    @GetMapping("/recommend")
+    public Map<String, Object> recommend(@RequestParam String type) {
+        return recommendationService.recommend(type);
     }
 }
