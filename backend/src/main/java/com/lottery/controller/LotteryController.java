@@ -3,6 +3,7 @@ package com.lottery.controller;
 import com.lottery.service.AnalysisService;
 import com.lottery.service.FetchService;
 import com.lottery.service.LotteryResultService;
+import com.lottery.service.RecommendationHistoryService;
 import com.lottery.service.RecommendationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +25,7 @@ public class LotteryController {
     private final FetchService fetchService;
     private final AnalysisService analysisService;
     private final RecommendationService recommendationService;
+    private final RecommendationHistoryService recommendationHistoryService;
 
     /** 查询开奖记录 */
     @GetMapping("/results")
@@ -124,5 +126,21 @@ public class LotteryController {
     @GetMapping("/recommend")
     public Map<String, Object> recommend(@RequestParam String type) {
         return recommendationService.recommend(type);
+    }
+
+    /** 推荐历史记录 */
+    @GetMapping("/recommend/history")
+    public Map<String, Object> recommendHistory(
+            @RequestParam String type,
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        return recommendationHistoryService.listHistory(type, limit, offset);
+    }
+
+    /** 推荐命中率统计 */
+    @GetMapping("/recommend/stats")
+    public Map<String, Object> recommendStats(@RequestParam String type) {
+        recommendationHistoryService.autoMatch(type);
+        return recommendationHistoryService.getStats(type);
     }
 }

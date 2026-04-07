@@ -21,6 +21,7 @@ public class SchemaMigrationRunner {
         ensureFetchHistoryTaskTable();
         ensureFetchHistoryDetailTable();
         ensureFetchHistoryIndexes();
+        ensureRecommendationHistoryTable();
     }
 
     private void ensureAuditColumns(String tableName) {
@@ -124,6 +125,25 @@ public class SchemaMigrationRunner {
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_fetch_history_detail_task_id ON fetch_history_detail(task_id)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_fetch_history_detail_type ON fetch_history_detail(lottery_type)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_fetch_history_detail_sort_order ON fetch_history_detail(task_id, sort_order)");
+    }
+
+    private void ensureRecommendationHistoryTable() {
+        jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS recommendation_history (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "lottery_type TEXT NOT NULL, " +
+                "recommend_date TEXT NOT NULL, " +
+                "strategy_name TEXT NOT NULL, " +
+                "strategy_index INTEGER NOT NULL, " +
+                "recommended_numbers TEXT NOT NULL, " +
+                "actual_numbers TEXT, " +
+                "hit_main INTEGER DEFAULT 0, " +
+                "hit_extra INTEGER DEFAULT 0, " +
+                "created_at TEXT, " +
+                "updated_at TEXT, " +
+                "UNIQUE(lottery_type, recommend_date, strategy_index)" +
+                ")");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_rec_history_type_date ON recommendation_history(lottery_type, recommend_date DESC)");
+        jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_rec_history_type_strategy ON recommendation_history(lottery_type, strategy_name)");
     }
 
     private void addColumnIfMissing(String tableName, List<String> existingColumns, String columnName, String definition) {

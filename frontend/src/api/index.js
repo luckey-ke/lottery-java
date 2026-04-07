@@ -23,4 +23,6 @@ export default {
   analyzeAll: () => api.get('/analyze'),
   trend: (type, n = 30) => api.get('/trend', { params: { type, n } }),
   recommend: (type) => api.get('/recommend', { params: { type } }),
+  recommendHistory: (type, limit = 20, offset = 0) => api.get('/recommend/history', { params: { type, limit, offset } }),
+  recommendStats: (type) => api.get('/recommend/stats', { params: { type } }),
 }

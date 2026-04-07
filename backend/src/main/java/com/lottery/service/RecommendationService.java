@@ -28,29 +28,44 @@ public class RecommendationService {
 
     private static final Set<Integer> PRIMES = Set.of(2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31);
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final String[] STRATEGIES = {"均衡策略", "热号追踪", "冷号回补", "统计最优", "随机精选"};
 
     private final LotteryResultService resultService;
     private final AnalysisService analysisService;
+    private final RecommendationHistoryService historyService;
 
     public Map<String, Object> recommend(String type) {
         List<LotteryResult> rows = resultService.allNumbers(type);
         if (rows.isEmpty()) return Map.of("error", "[" + type + "] 暂无数据，无法推荐");
 
-        // 用当天日期作为随机种子，同一天结果固定
+        // 自动匹配历史推荐
+        try { historyService.autoMatch(type); } catch (Exception ignored) {}
+
+        // 获取动态权重
+        double[] weights = historyService.getStrategyWeights(type);
         long seed = LocalDate.now().toEpochDay() * 100 + type.hashCode() % 100;
 
         Map<String, Object> result = switch (type) {
-            case "ssq" -> recommendSsq(rows, seed);
-            case "dlt" -> recommendDlt(rows, seed);
-            case "fc3d", "pl3" -> recommendPositional(rows, type, 3, seed);
-            case "pl5" -> recommendPositional(rows, type, 5, seed);
-            case "qlc" -> recommendQlc(rows, seed);
+            case "ssq" -> recommendSsq(rows, seed, weights);
+            case "dlt" -> recommendDlt(rows, seed, weights);
+            case "fc3d", "pl3" -> recommendPositional(rows, type, 3, seed, weights);
+            case "pl5" -> recommendPositional(rows, type, 5, seed, weights);
+            case "qlc" -> recommendQlc(rows, seed, weights);
             default -> Map.of("error", "未知彩种: " + type);
         };
 
-        result.put("date", LocalDate.now().format(DATE_FMT));
+        String today = LocalDate.now().format(DATE_FMT);
+        result.put("date", today);
         result.put("lotteryType", type);
         result.put("name", LotteryType.fromCode(type).getName());
+
+        // 保存到历史
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> groups = (List<Map<String, Object>>) result.get("groups");
+        if (groups != null) {
+            try { historyService.save(type, today, groups); } catch (Exception ignored) {}
+        }
+
         return result;
     }
 
@@ -58,7 +73,7 @@ public class RecommendationService {
     //  双色球推荐
     // ============================================================
 
-    private Map<String, Object> recommendSsq(List<LotteryResult> rows, long seed) {
+    private Map<String, Object> recommendSsq(List<LotteryResult> rows, long seed, double[] weights) {
         int[] redFreq = calcFreq(rows, true, 33);
         int[] blueFreq = calcFreqSsqBlue(rows);
         int[] redMissing = calcMissing(rows, true, 33);
@@ -79,19 +94,23 @@ public class RecommendationService {
         Random rnd = new Random(seed);
         List<Map<String, Object>> groups = new ArrayList<>();
 
+        // 权重影响候选池大小：权重越高，候选越多，选择空间越大
+        int hotBoost = (int) Math.round(weights[1] * 2);  // 热号权重
+        int coldBoost = (int) Math.round(weights[2] * 2); // 冷号权重
+
         // 策略1: 均衡策略 (3热+2温+1冷)
         groups.add(buildSsqGroup("均衡策略", rnd,
-                pickMix(redHot, redCold, redRecentHot, 3, 1, 2),
+                pickMix(redHot, redCold, redRecentHot, 3 + hotBoost / 2, 1 + coldBoost / 2, 2),
                 blueHot, blueCold, 1));
 
         // 策略2: 热号优先 (4热+2温)
         groups.add(buildSsqGroup("热号追踪", rnd,
-                pickMix(redHot, redCold, redRecentHot, 4, 0, 2),
+                pickMix(redHot, redCold, redRecentHot, 4 + hotBoost, 0, 2),
                 blueHot, blueCold, 1));
 
         // 策略3: 冷号回补 (2热+1温+3冷)
         groups.add(buildSsqGroup("冷号回补", rnd,
-                pickMix(redHot, redCold, redRecentHot, 2, 3, 1),
+                pickMix(redHot, redCold, redRecentHot, 2, 3 + coldBoost, 1),
                 blueHot, blueCold, 1));
 
         // 策略4: 统计最优 (AC值高+跨度适中)
@@ -183,7 +202,7 @@ public class RecommendationService {
     //  大乐透推荐
     // ============================================================
 
-    private Map<String, Object> recommendDlt(List<LotteryResult> rows, long seed) {
+    private Map<String, Object> recommendDlt(List<LotteryResult> rows, long seed, double[] weights) {
         int[] frontFreq = calcFreqDltFront(rows);
         int[] backFreq = calcFreqDltBack(rows);
 
@@ -199,9 +218,12 @@ public class RecommendationService {
         Random rnd = new Random(seed);
         List<Map<String, Object>> groups = new ArrayList<>();
 
-        groups.add(buildDltGroup("均衡策略", rnd, pickMix(frontHot, frontCold, frontRecentHot, 3, 1, 1), backHot, backCold));
-        groups.add(buildDltGroup("热号追踪", rnd, pickMix(frontHot, frontCold, frontRecentHot, 4, 0, 1), backHot, backCold));
-        groups.add(buildDltGroup("冷号回补", rnd, pickMix(frontHot, frontCold, frontRecentHot, 1, 3, 1), backHot, backCold));
+        int hotBoost = (int) Math.round(weights[1] * 2);
+        int coldBoost = (int) Math.round(weights[2] * 2);
+
+        groups.add(buildDltGroup("均衡策略", rnd, pickMix(frontHot, frontCold, frontRecentHot, 3 + hotBoost / 2, 1 + coldBoost / 2, 1), backHot, backCold));
+        groups.add(buildDltGroup("热号追踪", rnd, pickMix(frontHot, frontCold, frontRecentHot, 4 + hotBoost, 0, 1), backHot, backCold));
+        groups.add(buildDltGroup("冷号回补", rnd, pickMix(frontHot, frontCold, frontRecentHot, 1, 3 + coldBoost, 1), backHot, backCold));
         groups.add(buildDltGroup("统计最优", rnd, selectByScore(frontFreq, 5, 35, rnd), backHot, backCold));
         groups.add(buildDltGroup("随机精选", rnd, randomPool(1, 35), backHot, backCold));
 
@@ -234,7 +256,7 @@ public class RecommendationService {
     //  位置型推荐 (3D / 排列三 / 排列五)
     // ============================================================
 
-    private Map<String, Object> recommendPositional(List<LotteryResult> rows, String type, int positions, long seed) {
+    private Map<String, Object> recommendPositional(List<LotteryResult> rows, String type, int positions, long seed, double[] weights) {
         // 各位频率
         int[][] posFreq = new int[positions][10];
         for (LotteryResult row : rows) {
@@ -253,10 +275,14 @@ public class RecommendationService {
         Random rnd = new Random(seed);
         List<Map<String, Object>> groups = new ArrayList<>();
 
+        // 权重调整热号偏向
+        double hotW = weights[1];
+        double coldW = weights[2];
+
         // 策略1: 各位取热号
-        groups.add(buildPositionalGroup("热号追踪", positions, posFreq, recentPosFreq, rnd, 0.7));
+        groups.add(buildPositionalGroup("热号追踪", positions, posFreq, recentPosFreq, rnd, 0.5 + hotW * 0.15));
         // 策略2: 各位取冷号
-        groups.add(buildPositionalGroup("冷号回补", positions, posFreq, recentPosFreq, rnd, 0.3));
+        groups.add(buildPositionalGroup("冷号回补", positions, posFreq, recentPosFreq, rnd, 0.5 - coldW * 0.15));
         // 策略3: 均衡
         groups.add(buildPositionalGroup("均衡策略", positions, posFreq, recentPosFreq, rnd, 0.5));
         // 策略4: 近期趋势
@@ -300,7 +326,7 @@ public class RecommendationService {
     //  七乐彩推荐
     // ============================================================
 
-    private Map<String, Object> recommendQlc(List<LotteryResult> rows, long seed) {
+    private Map<String, Object> recommendQlc(List<LotteryResult> rows, long seed, double[] weights) {
         int[] freq = calcFreqQlc(rows);
         int[] missing = calcMissingQlc(rows);
 
@@ -314,9 +340,12 @@ public class RecommendationService {
         Random rnd = new Random(seed);
         List<Map<String, Object>> groups = new ArrayList<>();
 
-        groups.add(buildQlcGroup("均衡策略", rnd, pickMix(hot, cold, recentHot, 3, 2, 2)));
-        groups.add(buildQlcGroup("热号追踪", rnd, pickMix(hot, cold, recentHot, 5, 0, 2)));
-        groups.add(buildQlcGroup("冷号回补", rnd, pickMix(hot, cold, recentHot, 2, 4, 1)));
+        int hotBoost = (int) Math.round(weights[1] * 2);
+        int coldBoost = (int) Math.round(weights[2] * 2);
+
+        groups.add(buildQlcGroup("均衡策略", rnd, pickMix(hot, cold, recentHot, 3 + hotBoost / 2, 2 + coldBoost / 2, 2)));
+        groups.add(buildQlcGroup("热号追踪", rnd, pickMix(hot, cold, recentHot, 5 + hotBoost, 0, 2)));
+        groups.add(buildQlcGroup("冷号回补", rnd, pickMix(hot, cold, recentHot, 2, 4 + coldBoost, 1)));
         groups.add(buildQlcGroup("统计最优", rnd, selectByScore(freq, 7, 30, rnd)));
         groups.add(buildQlcGroup("随机精选", rnd, randomPool(1, 30)));
 
