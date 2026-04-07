@@ -102,6 +102,27 @@
 
     <!-- 隐藏的图片预览 -->
     <canvas ref="canvasEl" style="display:none"></canvas>
+
+    <!-- 图片预览弹窗 -->
+    <Transition name="modal">
+      <div v-if="showPreview" class="modal-overlay" @click.self="closePreview">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>🖼️ 图片预览</h3>
+            <button class="modal-close" @click="closePreview">✕</button>
+          </div>
+          <div class="modal-body">
+            <img :src="previewUrl" class="preview-img" alt="推荐图片预览" />
+          </div>
+          <div class="modal-footer">
+            <button class="btn-modal cancel" @click="closePreview">关闭</button>
+            <button class="btn-modal confirm" @click="downloadImage">
+              <span>💾</span> 保存图片
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -126,6 +147,8 @@ const copied = ref(false)
 const generating = ref(false)
 const canvasEl = ref(null)
 const cardsContainer = ref(null)
+const previewUrl = ref('')
+const showPreview = ref(false)
 
 async function loadRecommend() {
   data.value = null
@@ -359,19 +382,32 @@ async function generateImage() {
     ctx.font = '11px "Inter", -apple-system, "PingFang SC", sans-serif'
     ctx.fillText('LotteryLab · lottery-java', W / 2, fy + 30)
 
-    // Download
+    // Show preview instead of direct download
     canvas.toBlob(blob => {
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${data.value.name}_推荐_${data.value.date}.png`
-      a.click()
-      URL.revokeObjectURL(url)
+      previewUrl.value = url
+      showPreview.value = true
       generating.value = false
     }, 'image/png')
   } catch (e) {
     console.error('Image generation failed:', e)
     generating.value = false
+  }
+}
+
+function downloadImage() {
+  if (!previewUrl.value || !data.value) return
+  const a = document.createElement('a')
+  a.href = previewUrl.value
+  a.download = `${data.value.name}_推荐_${data.value.date}.png`
+  a.click()
+}
+
+function closePreview() {
+  showPreview.value = false
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+    previewUrl.value = ''
   }
 }
 
@@ -506,6 +542,71 @@ onMounted(() => loadRecommend())
 .empty-icon { font-size: 48px; display: block; margin-bottom: 16px; }
 .empty-hero h3 { font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
 .empty-hero p { font-size: 14px; }
+
+/* ========== Modal ========== */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 24px;
+}
+.modal-content {
+  background: var(--bg-card); border-radius: var(--radius-xl);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.2);
+  max-width: 860px; width: 100%; max-height: 90vh;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 18px 24px; border-bottom: 1px solid var(--border-light);
+}
+.modal-header h3 { font-size: 16px; font-weight: 700; }
+.modal-close {
+  width: 32px; height: 32px; border-radius: 50%; border: none;
+  background: var(--bg); color: var(--text-muted); font-size: 16px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.modal-close:hover { background: var(--red-bg); color: var(--red); }
+.modal-body {
+  padding: 20px 24px; overflow-y: auto; flex: 1;
+  display: flex; justify-content: center; background: #e5e7eb;
+}
+.preview-img {
+  max-width: 100%; max-height: 60vh;
+  border-radius: var(--radius); box-shadow: var(--shadow-md);
+}
+.modal-footer {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 16px 24px; border-top: 1px solid var(--border-light);
+}
+.btn-modal {
+  padding: 10px 20px; border-radius: var(--radius-sm); border: none;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  font-family: var(--font); transition: all 0.2s;
+  display: flex; align-items: center; gap: 6px;
+}
+.btn-modal.cancel {
+  background: var(--bg); color: var(--text-secondary);
+}
+.btn-modal.cancel:hover { background: var(--border); }
+.btn-modal.confirm {
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  color: #fff;
+}
+.btn-modal.confirm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99,102,241,0.4);
+}
+
+/* Modal transition */
+.modal-enter-active { animation: fadeIn 0.2s ease; }
+.modal-leave-active { animation: fadeIn 0.2s ease reverse; }
+.modal-enter-active .modal-content { animation: scaleIn 0.25s ease; }
+.modal-leave-active .modal-content { animation: scaleIn 0.2s ease reverse; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 @media (max-width: 768px) {
   .page-hero { flex-direction: column; align-items: flex-start; }
