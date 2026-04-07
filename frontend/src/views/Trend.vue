@@ -3,7 +3,7 @@
     <div class="page-hero">
       <div>
         <h1 class="page-title">趋势分析</h1>
-        <p class="page-subtitle">和值走势、奇偶比变化、区间分布、蓝球走势等可视化趋势</p>
+        <p class="page-subtitle">和值、跨度、AC值、连号、重号、奇偶比、区间分布等趋势可视化</p>
       </div>
       <div class="hero-controls">
         <div class="type-pills">
@@ -29,13 +29,23 @@
         <div class="chart-panel">
           <div class="chart-header">
             <h3>📈 红球和值走势</h3>
-            <span class="chart-hint">红线为平均值参考 (≈102)</span>
+            <span class="chart-hint">红线为平均值参考</span>
           </div>
           <div ref="sumChart" class="chart-area"></div>
         </div>
         <div class="chart-grid">
           <div class="chart-panel">
-            <div class="chart-header"><h3>⚖️ 奇数 / 大号个数走势</h3></div>
+            <div class="chart-header"><h3>📏 跨度走势</h3></div>
+            <div ref="spanChart" class="chart-area"></div>
+          </div>
+          <div class="chart-panel">
+            <div class="chart-header"><h3>🧮 AC值走势</h3></div>
+            <div ref="acChart" class="chart-area"></div>
+          </div>
+        </div>
+        <div class="chart-grid">
+          <div class="chart-panel">
+            <div class="chart-header"><h3>⚖️ 奇数 / 大号 / 质数个数</h3></div>
             <div ref="ratioChart" class="chart-area"></div>
           </div>
           <div class="chart-panel">
@@ -43,12 +53,18 @@
             <div ref="blueChart" class="chart-area"></div>
           </div>
         </div>
-        <div class="chart-panel">
-          <div class="chart-header">
-            <h3>🎯 三区分布走势</h3>
-            <span class="chart-hint">一区(1-11) / 二区(12-22) / 三区(23-33)</span>
+        <div class="chart-grid">
+          <div class="chart-panel">
+            <div class="chart-header"><h3>🔗 连号 / 重号走势</h3></div>
+            <div ref="consecChart" class="chart-area"></div>
           </div>
-          <div ref="zoneChart" class="chart-area"></div>
+          <div class="chart-panel">
+            <div class="chart-header">
+              <h3>🎯 三区分布走势</h3>
+              <span class="chart-hint">一区(1-11) / 二区(12-22) / 三区(23-33)</span>
+            </div>
+            <div ref="zoneChart" class="chart-area"></div>
+          </div>
         </div>
       </template>
 
@@ -64,17 +80,39 @@
             <div ref="backSumChart" class="chart-area"></div>
           </div>
         </div>
-        <div class="chart-panel">
-          <div class="chart-header"><h3>⚖️ 前区奇数个数走势</h3></div>
-          <div ref="ratioChart" class="chart-area"></div>
+        <div class="chart-grid">
+          <div class="chart-panel">
+            <div class="chart-header"><h3>📏 前区跨度走势</h3></div>
+            <div ref="spanChart" class="chart-area"></div>
+          </div>
+          <div class="chart-panel">
+            <div class="chart-header"><h3>🧮 前区AC值走势</h3></div>
+            <div ref="acChart" class="chart-area"></div>
+          </div>
+        </div>
+        <div class="chart-grid">
+          <div class="chart-panel">
+            <div class="chart-header"><h3>⚖️ 奇数 / 质数个数走势</h3></div>
+            <div ref="ratioChart" class="chart-area"></div>
+          </div>
+          <div class="chart-panel">
+            <div class="chart-header"><h3>🔁 重号走势</h3></div>
+            <div ref="consecChart" class="chart-area"></div>
+          </div>
         </div>
       </template>
 
       <!-- 位置型: 福彩3D/排列三/排列五 -->
       <template v-if="['fc3d','pl3','pl5'].includes(selectedType)">
-        <div class="chart-panel">
-          <div class="chart-header"><h3>📈 和值走势</h3></div>
-          <div ref="sumChart" class="chart-area"></div>
+        <div class="chart-grid">
+          <div class="chart-panel">
+            <div class="chart-header"><h3>📈 和值走势</h3></div>
+            <div ref="sumChart" class="chart-area"></div>
+          </div>
+          <div class="chart-panel">
+            <div class="chart-header"><h3>📏 跨度走势</h3></div>
+            <div ref="spanChart" class="chart-area"></div>
+          </div>
         </div>
         <div class="chart-grid">
           <div class="chart-panel">
@@ -82,8 +120,8 @@
             <div ref="oddEvenChart" class="chart-area"></div>
           </div>
           <div class="chart-panel">
-            <div class="chart-header"><h3>📐 大小比走势</h3></div>
-            <div ref="sizeChart" class="chart-area"></div>
+            <div class="chart-header"><h3>🔁 重号走势</h3></div>
+            <div ref="consecChart" class="chart-area"></div>
           </div>
         </div>
         <!-- 各位号码走势 -->
@@ -95,18 +133,24 @@
 
       <!-- 七乐彩 -->
       <template v-if="selectedType === 'qlc'">
-        <div class="chart-panel">
-          <div class="chart-header"><h3>📈 和值走势</h3></div>
-          <div ref="sumChart" class="chart-area"></div>
+        <div class="chart-grid">
+          <div class="chart-panel">
+            <div class="chart-header"><h3>📈 和值走势</h3></div>
+            <div ref="sumChart" class="chart-area"></div>
+          </div>
+          <div class="chart-panel">
+            <div class="chart-header"><h3>📏 跨度走势</h3></div>
+            <div ref="spanChart" class="chart-area"></div>
+          </div>
         </div>
         <div class="chart-grid">
           <div class="chart-panel">
-            <div class="chart-header"><h3>⚖️ 奇数个数走势</h3></div>
-            <div ref="oddEvenChart" class="chart-area"></div>
+            <div class="chart-header"><h3>⚖️ 奇数 / 质数个数走势</h3></div>
+            <div ref="ratioChart" class="chart-area"></div>
           </div>
           <div class="chart-panel">
-            <div class="chart-header"><h3>📐 大号个数走势</h3></div>
-            <div ref="sizeChart" class="chart-area"></div>
+            <div class="chart-header"><h3>🔁 重号走势</h3></div>
+            <div ref="consecChart" class="chart-area"></div>
           </div>
         </div>
       </template>
@@ -156,12 +200,15 @@ const selectedType = ref('ssq')
 const recentN = ref(30)
 const trendData = ref(null)
 const sumChart = ref(null)
+const spanChart = ref(null)
+const acChart = ref(null)
 const ratioChart = ref(null)
 const zoneChart = ref(null)
 const blueChart = ref(null)
 const backSumChart = ref(null)
 const oddEvenChart = ref(null)
 const sizeChart = ref(null)
+const consecChart = ref(null)
 const posTrendCharts = ref([])
 
 const positionCount = computed(() => {
@@ -233,13 +280,24 @@ function renderTrend(data) {
       { name: '和值', data: data.trend.map(t => t.sum), area: true },
       { name: '平均(' + avgSum + ')', data: data.trend.map(() => avgSum), lineStyle: { type: 'dashed', width: 1.5 } },
     ], ['#6366f1', '#ef4444'])
+    makeLine(spanChart.value, xData, [
+      { name: '跨度', data: data.trend.map(t => t.span), area: true },
+    ], ['#f59e0b'])
+    makeLine(acChart.value, xData, [
+      { name: 'AC值', data: data.trend.map(t => t.ac), area: true },
+    ], ['#10b981'])
     makeLine(ratioChart.value, xData, [
       { name: '奇数个数', data: data.trend.map(t => t.oddCount), area: true },
       { name: '大号个数', data: data.trend.map(t => t.bigCount), area: true },
-    ], ['#f59e0b', '#10b981'])
+      { name: '质数个数', data: data.trend.map(t => t.primeCount), area: true },
+    ], ['#f59e0b', '#8b5cf6', '#ec4899'])
     makeLine(blueChart.value, xData, [
       { name: '蓝球', data: data.trend.map(t => t.blue), area: true },
     ], ['#3b82f6'])
+    makeLine(consecChart.value, xData, [
+      { name: '连号', data: data.trend.map(t => t.consecutive), area: true },
+      { name: '重号', data: data.trend.map(t => t.repeats ?? 0), area: true },
+    ], ['#8b5cf6', '#ef4444'])
     makeLine(zoneChart.value, xData, [
       { name: '一区(1-11)', data: data.trend.map(t => t.zone1), area: true },
       { name: '二区(12-22)', data: data.trend.map(t => t.zone2), area: true },
@@ -252,19 +310,32 @@ function renderTrend(data) {
     makeLine(backSumChart.value, xData, [
       { name: '后区和值', data: data.trend.map(t => t.backSum), area: true },
     ], ['#3b82f6'])
+    makeLine(spanChart.value, xData, [
+      { name: '前区跨度', data: data.trend.map(t => t.frontSpan), area: true },
+    ], ['#f59e0b'])
+    makeLine(acChart.value, xData, [
+      { name: '前区AC值', data: data.trend.map(t => t.frontAC), area: true },
+    ], ['#10b981'])
     makeLine(ratioChart.value, xData, [
       { name: '前区奇数', data: data.trend.map(t => t.frontOdd), area: true },
-    ], ['#f59e0b'])
+      { name: '前区质数', data: data.trend.map(t => t.frontPrime), area: true },
+    ], ['#f59e0b', '#ec4899'])
+    makeLine(consecChart.value, xData, [
+      { name: '重号', data: data.trend.map(t => t.repeats ?? 0), area: true },
+    ], ['#ef4444'])
   } else if (['fc3d', 'pl3', 'pl5'].includes(t)) {
     makeLine(sumChart.value, xData, [
       { name: '和值', data: data.trend.map(t => t.sum), area: true },
     ], ['#6366f1'])
+    makeLine(spanChart.value, xData, [
+      { name: '跨度', data: data.trend.map(t => t.span), area: true },
+    ], ['#f59e0b'])
     if (oddEvenChart.value) makeLine(oddEvenChart.value, xData, [
       { name: '奇数个数', data: data.trend.map(t => t.oddCount), area: true },
     ], ['#f59e0b'])
-    if (sizeChart.value) makeLine(sizeChart.value, xData, [
-      { name: '大号个数(≥5)', data: data.trend.map(t => t.bigCount), area: true },
-    ], ['#10b981'])
+    if (consecChart.value) makeLine(consecChart.value, xData, [
+      { name: '重号', data: data.trend.map(t => t.repeats ?? 0), area: true },
+    ], ['#ef4444'])
     const colors = ['#ef4444', '#3b82f6', '#f59e0b', '#10b981', '#8b5cf6']
     for (let i = 0; i < positionCount.value; i++) {
       if (posTrendCharts.value[i]) {
@@ -277,12 +348,16 @@ function renderTrend(data) {
     makeLine(sumChart.value, xData, [
       { name: '和值', data: data.trend.map(t => t.sum), area: true },
     ], ['#8b5cf6'])
-    if (oddEvenChart.value) makeLine(oddEvenChart.value, xData, [
-      { name: '奇数个数', data: data.trend.map(t => t.oddCount), area: true },
+    makeLine(spanChart.value, xData, [
+      { name: '跨度', data: data.trend.map(t => t.span), area: true },
     ], ['#f59e0b'])
-    if (sizeChart.value) makeLine(sizeChart.value, xData, [
-      { name: '大号个数(≥16)', data: data.trend.map(t => t.bigCount), area: true },
-    ], ['#10b981'])
+    makeLine(ratioChart.value, xData, [
+      { name: '奇数个数', data: data.trend.map(t => t.oddCount), area: true },
+      { name: '质数个数', data: data.trend.map(t => t.primeCount), area: true },
+    ], ['#f59e0b', '#ec4899'])
+    makeLine(consecChart.value, xData, [
+      { name: '重号', data: data.trend.map(t => t.repeats ?? 0), area: true },
+    ], ['#ef4444'])
   }
 }
 
