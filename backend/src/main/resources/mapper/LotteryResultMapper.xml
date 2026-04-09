@@ -3,7 +3,118 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.lottery.mapper.LotteryResultMapper">
 
-    <!-- 用于 MySQL 时，将 INSERT OR IGNORE 改为 INSERT IGNORE -->
-    <!-- 这里保留注解方式，XML 作为扩展点 -->
+    <!-- UPSERT（SQLite 用 ON CONFLICT，MySQL 需改为 INSERT ... ON DUPLICATE KEY UPDATE） -->
+    <insert id="upsertReal">
+        INSERT INTO lottery_result(lottery_type, draw_num, draw_date, numbers, extra_info, fetched_at, created_at, created_by, updated_at, updated_by)
+        VALUES(#{lotteryType}, #{drawNum}, #{drawDate}, #{numbers}, #{extraInfo}, #{fetchedAt}, #{createdAt}, #{createdBy}, #{updatedAt}, #{updatedBy})
+        ON CONFLICT(lottery_type, draw_num) DO UPDATE SET
+            draw_date = excluded.draw_date,
+            numbers = excluded.numbers,
+            extra_info = excluded.extra_info,
+            fetched_at = excluded.fetched_at,
+            updated_at = excluded.updated_at,
+            updated_by = excluded.updated_by
+    </insert>
+
+    <!-- 检查是否存在 -->
+    <select id="existsReal" resultType="int">
+        SELECT COUNT(*) FROM lottery_result
+        WHERE lottery_type = #{type} AND draw_num = #{drawNum}
+    </select>
+
+    <!-- 按彩种分页查询 -->
+    <select id="findByType" resultType="com.lottery.entity.LotteryResult">
+        SELECT * FROM lottery_result
+        WHERE lottery_type = #{type}
+        ORDER BY draw_num DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 全部分页查询 -->
+    <select id="findAll" resultType="com.lottery.entity.LotteryResult">
+        SELECT * FROM lottery_result
+        ORDER BY draw_date DESC, draw_num DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 总数 -->
+    <select id="countAll" resultType="int">
+        SELECT COUNT(*) FROM lottery_result
+    </select>
+
+    <!-- 按彩种计数 -->
+    <select id="countByType" resultType="int">
+        SELECT COUNT(*) FROM lottery_result
+        WHERE lottery_type = #{type}
+    </select>
+
+    <!-- 最新期号 -->
+    <select id="findLatestDrawNum" resultType="string">
+        SELECT draw_num FROM lottery_result
+        WHERE lottery_type = #{type}
+        ORDER BY draw_num DESC LIMIT 1
+    </select>
+
+    <!-- 查询某彩种最新一条完整记录 -->
+    <select id="findLatestByType" resultType="com.lottery.entity.LotteryResult">
+        SELECT * FROM lottery_result
+        WHERE lottery_type = #{type}
+        ORDER BY draw_num DESC LIMIT 1
+    </select>
+
+    <!-- 按日期范围查询 -->
+    <select id="findByTypeAndDateRange" resultType="com.lottery.entity.LotteryResult">
+        SELECT * FROM lottery_result
+        WHERE lottery_type = #{type}
+          AND draw_date &gt;= #{startDate}
+          AND draw_date &lt;= #{endDate}
+        ORDER BY draw_num ASC
+    </select>
+
+    <!-- 按期号查询单条 -->
+    <select id="findByTypeAndDrawNum" resultType="com.lottery.entity.LotteryResult">
+        SELECT * FROM lottery_result
+        WHERE lottery_type = #{type} AND draw_num = #{drawNum}
+    </select>
+
+    <!-- 全量号码查询（用于分析，按期号升序） -->
+    <select id="findAllNumbers" resultType="com.lottery.entity.LotteryResult">
+        SELECT draw_num, draw_date, numbers FROM lottery_result
+        WHERE lottery_type = #{type}
+        ORDER BY draw_num ASC
+    </select>
+
+    <!-- 按 ID 查询 -->
+    <select id="findById" resultType="com.lottery.entity.LotteryResult">
+        SELECT * FROM lottery_result WHERE id = #{id}
+    </select>
+
+    <!-- 删除某条记录 -->
+    <delete id="deleteById">
+        DELETE FROM lottery_result WHERE id = #{id}
+    </delete>
+
+    <!-- 删除某彩种全部记录 -->
+    <delete id="deleteByType">
+        DELETE FROM lottery_result WHERE lottery_type = #{type}
+    </delete>
+
+    <!-- 批量插入（用于批量导入，使用 INSERT OR IGNORE 避免冲突） -->
+    <insert id="batchInsert">
+        INSERT OR IGNORE INTO lottery_result(lottery_type, draw_num, draw_date, numbers, extra_info, fetched_at, created_at, created_by, updated_at, updated_by)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.lotteryType}, #{item.drawNum}, #{item.drawDate}, #{item.numbers}, #{item.extraInfo},
+             #{item.fetchedAt}, #{item.createdAt}, #{item.createdBy}, #{item.updatedAt}, #{item.updatedBy})
+        </foreach>
+    </insert>
+
+    <!-- 各彩种数据量统计 -->
+    <select id="countByAllTypes" resultType="java.util.Map">
+        SELECT lottery_type AS type, COUNT(*) AS count,
+               MAX(draw_num) AS latestDrawNum, MAX(draw_date) AS latestDrawDate
+        FROM lottery_result
+        GROUP BY lottery_type
+    </select>
 
 </mapper>

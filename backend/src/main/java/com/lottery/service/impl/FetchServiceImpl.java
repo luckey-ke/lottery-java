@@ -9,6 +9,10 @@ import com.lottery.service.FetchService;
 import com.lottery.service.LotteryResultService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -33,6 +37,8 @@ import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import jakarta.annotation.PostConstruct;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -50,14 +56,8 @@ public class FetchServiceImpl implements FetchService {
     private static final int TASK_THREAD_COUNT = 4;
     private static final DateTimeFormatter TASK_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    private static final Pattern ZHCW_ROW_PATTERN = Pattern.compile("(?is)<tr[^>]*>(.*?)</tr>");
-    private static final Pattern ZHCW_CELL_PATTERN = Pattern.compile("(?is)<t[dh][^>]*>(.*?)</t[dh]>");
-    private static final Pattern EM_NUMBER_PATTERN = Pattern.compile("<em[^>]*>(\\d+)</em>");
-    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("(?is)<[^>]+>");
-    private static final Pattern TITLE_ATTR_PATTERN = Pattern.compile("(?i)title\\s*=\\s*\"([^\"]+)\"");
-    private static final Pattern PAGE_NUM_PATTERN = Pattern.compile("pageNum=(\\d+)");
     private static final Pattern DATE_PATTERN = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
-    private static final Pattern DRAW_NUM_PATTERN = Pattern.compile("\\d+");
+    private static final Pattern PAGE_NUM_PATTERN = Pattern.compile("pageNum=(\\d+)");
     private static final String DETAIL_LABEL_INFO = "详细信息";
     private static final String DETAIL_LABEL_VIDEO = "开奖视频";
     private static final String ZHCW_SSQ_DETAIL_URL = "https://www.zhcw.com/kjxx/ssq/";
@@ -82,6 +82,26 @@ public class FetchServiceImpl implements FetchService {
             .build();
     private final ExecutorService taskExecutor = Executors.newFixedThreadPool(TASK_THREAD_COUNT);
     private final Map<String, FetchTask> taskStore = new ConcurrentHashMap<>();
+
+    /**
+     * 启动时恢复：将未完成的任务标记为 failed（因服务重启中断）
+     */
+    @PostConstruct
+    public void recoverUnfinishedTasks() {
+        try {
+            List<Map<String, Object>> unfinished = fetchHistoryService.findUnfinishedTasks();
+            if (!unfinished.isEmpty()) {
+                log.info("[启动恢复] 发现 {} 个未完成任务，标记为 failed", unfinished.size());
+                for (Map<String, Object> taskData : unfinished) {
+                    String taskId = stringValue(taskData.get("taskId"));
+                    fetchHistoryService.markTaskFailed(taskId, "服务重启，任务中断");
+                    log.info("[启动恢复] 已标记任务 {} 为 failed", taskId);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[启动恢复] 恢复未完成任务失败: {}", e.getMessage());
+        }
+    }
 
     @Override
     public Map<String, Object> fetchAll(String scope, Integer count) {
@@ -508,33 +528,8 @@ public class FetchServiceImpl implements FetchService {
         return parts.isEmpty() ? null : String.join(delimiter, parts);
     }
 
-    private String buildDetailFromTitles(List<String> titles) {
-        List<String> filtered = new ArrayList<>();
-        for (String title : titles) {
-            if (title == null || title.isBlank()) {
-                continue;
-            }
-            if (DETAIL_LABEL_INFO.equals(title) || DETAIL_LABEL_VIDEO.equals(title)) {
-                continue;
-            }
-            filtered.add(title.trim());
-        }
-        return filtered.isEmpty() ? null : String.join(SLASH_SEPARATOR, filtered);
-    }
-
-    private String extractTitleText(String html) {
-        if (html == null || html.isBlank()) {
-            return null;
-        }
-        Matcher matcher = TITLE_ATTR_PATTERN.matcher(html);
-        List<String> titles = new ArrayList<>();
-        while (matcher.find()) {
-            String title = cleanCellText(matcher.group(1));
-            if (title != null) {
-                titles.add(title);
-            }
-        }
-        return buildDetailFromTitles(titles);
+    private String appendExtraDetail(String detail, String extraText) {
+        return joinNonBlank(DETAIL_SEPARATOR, detail, extraText);
     }
 
     private Map<String, String> buildZhcwDetailLinks(String type) {
@@ -559,87 +554,6 @@ public class FetchServiceImpl implements FetchService {
         return links;
     }
 
-    private Object resolveZhcwDetailValue(String type, List<String> cells, int index) {
-        Map<String, String> links = buildZhcwDetailLinks(type);
-        String extraText = firstNonBlank(cellTitleText(cells, index), cellText(cells, index));
-        if (links.isEmpty()) {
-            return extraText;
-        }
-
-        Map<String, Object> detail = new LinkedHashMap<>();
-        if (extraText != null && !extraText.isBlank()) {
-            detail.put("text", extraText);
-        }
-        detail.put("links", links);
-        return detail;
-    }
-
-    private String appendExtraDetail(String detail, String extraText) {
-        return joinNonBlank(DETAIL_SEPARATOR, detail, extraText);
-    }
-
-    private String cleanCellText(String html) {
-        if (html == null || html.isBlank()) {
-            return null;
-        }
-        String text = HTML_TAG_PATTERN.matcher(html).replaceAll(" ")
-                .replace("&nbsp;", " ")
-                .replace("&#160;", " ")
-                .replace("&amp;", "&")
-                .trim()
-                .replaceAll("\\s+", " ");
-        return text.isBlank() ? null : text;
-    }
-
-    private List<String> extractCells(String rowHtml) {
-        List<String> cells = new ArrayList<>();
-        Matcher cellMatcher = ZHCW_CELL_PATTERN.matcher(rowHtml);
-        while (cellMatcher.find()) {
-            cells.add(cellMatcher.group(1));
-        }
-        return cells;
-    }
-
-    private boolean isDataRow(List<String> cells) {
-        if (cells.size() < 3) {
-            return false;
-        }
-        String dateText = cleanCellText(cells.get(0));
-        String drawNumText = cleanCellText(cells.get(1));
-        return dateText != null && DATE_PATTERN.matcher(dateText).matches()
-                && drawNumText != null && DRAW_NUM_PATTERN.matcher(drawNumText).matches();
-    }
-
-    private String cellText(List<String> cells, int index) {
-        if (index < 0 || index >= cells.size()) {
-            return null;
-        }
-        return cleanCellText(cells.get(index));
-    }
-
-    private String cellTitleText(List<String> cells, int index) {
-        if (index < 0 || index >= cells.size()) {
-            return null;
-        }
-        return extractTitleText(cells.get(index));
-    }
-
-    private String buildZhcwExtraInfo(String type, List<String> cells) {
-        return switch (type) {
-            case "ssq", "qlc" -> buildExtraInfo(
-                    cellText(cells, 3),
-                    cellText(cells, 4),
-                    cellText(cells, 5),
-                    resolveZhcwDetailValue(type, cells, 6));
-            case "fc3d" -> buildExtraInfo(
-                    cellText(cells, 6),
-                    cellText(cells, 3),
-                    cellText(cells, 4),
-                    buildFc3dDetailValue(cells));
-            default -> null;
-        };
-    }
-
     private Object mergeDetailValue(Object baseDetail, String extraText) {
         String normalizedExtraText = blankToNull(extraText);
         if (baseDetail instanceof Map<?, ?> baseMap) {
@@ -657,14 +571,6 @@ public class FetchServiceImpl implements FetchService {
         }
         String baseText = baseDetail == null ? null : String.valueOf(baseDetail);
         return appendExtraDetail(baseText, normalizedExtraText);
-    }
-
-    private Object buildFc3dDetailValue(List<String> cells) {
-        Object baseDetail = resolveZhcwDetailValue("fc3d", cells, 8);
-        String extraText = joinNonBlank(DETAIL_SEPARATOR,
-                prefixedValue("组选6:", cellText(cells, 5)),
-                prefixedValue("返奖比例:", cellText(cells, 7)));
-        return mergeDetailValue(baseDetail, extraText);
     }
 
     private String getZhcwLotteryId(String type) {
@@ -925,9 +831,14 @@ public class FetchServiceImpl implements FetchService {
                 stats.setCurrentPage(pageNo);
                 notifyTaskProgress(task, type, stats);
 
-                String html = sendGet(pageUrlPattern.formatted(pageNo), false, null);
-                List<LotteryResult> pageResults = parseZhcwHtml(type, html);
-                int lastPage = extractLastPageNo(html);
+                String url = pageUrlPattern.formatted(pageNo);
+                Document doc = Jsoup.connect(url)
+                        .userAgent(UA)
+                        .timeout(20_000)
+                        .get();
+
+                List<LotteryResult> pageResults = parseZhcwHtmlWithJsoup(type, doc);
+                int lastPage = extractLastPageNoFromDoc(doc);
                 if (pageResults.isEmpty()) {
                     if (pageNo <= lastPage && emptyRetryCount < ZHCW_MAX_EMPTY_RETRIES) {
                         emptyRetryCount++;
@@ -987,20 +898,27 @@ public class FetchServiceImpl implements FetchService {
         }
     }
 
-    private List<LotteryResult> parseZhcwHtml(String type, String html) {
+    /**
+     * 使用 Jsoup 解析中彩网 HTML 表格（双色球/福彩3D/七乐彩）
+     */
+    private List<LotteryResult> parseZhcwHtmlWithJsoup(String type, Document doc) {
         List<LotteryResult> list = new ArrayList<>();
-        Matcher rowMatcher = ZHCW_ROW_PATTERN.matcher(html);
-        while (rowMatcher.find()) {
-            List<String> cells = extractCells(rowMatcher.group(1));
-            if (!isDataRow(cells)) {
+        Elements rows = doc.select("table tr");
+        for (Element row : rows) {
+            Elements cells = row.select("td, th");
+            if (cells.size() < 3) continue;
+
+            String drawDate = cells.get(0).text().trim();
+            String drawNum = cells.get(1).text().trim();
+            if (!drawDate.matches("\\d{4}-\\d{2}-\\d{2}") || !drawNum.matches("\\d+")) {
                 continue;
             }
-            String drawDate = cellText(cells, 0);
-            String drawNum = cellText(cells, 1);
-            String numbersHtml = cells.get(2);
-            List<String> nums = extractEmNumbers(numbersHtml);
+
+            // 提取 <em> 标签中的号码
+            Elements ems = cells.get(2).select("em");
+            List<String> nums = ems.eachText();
             String numbers = formatZhcwNumbers(type, nums);
-            if (drawDate == null || drawNum == null || numbers.isBlank()) {
+            if (drawDate.isBlank() || drawNum.isBlank() || numbers.isBlank()) {
                 continue;
             }
 
@@ -1009,19 +927,104 @@ public class FetchServiceImpl implements FetchService {
             result.setDrawNum(drawNum);
             result.setDrawDate(drawDate);
             result.setNumbers(numbers);
-            result.setExtraInfo(buildZhcwExtraInfo(type, cells));
+            result.setExtraInfo(buildZhcwExtraInfoJsoup(type, cells));
             list.add(result);
         }
         return list;
     }
 
-    private List<String> extractEmNumbers(String html) {
-        List<String> nums = new ArrayList<>();
-        Matcher matcher = EM_NUMBER_PATTERN.matcher(html);
-        while (matcher.find()) {
-            nums.add(matcher.group(1));
+    /**
+     * 使用 Jsoup 提取 title 属性文本
+     */
+    private String extractTitleTextJsoup(Element cell) {
+        Elements links = cell.select("[title]");
+        if (links.isEmpty()) return null;
+        List<String> titles = new ArrayList<>();
+        for (Element link : links) {
+            String title = link.attr("title").trim();
+            if (!title.isBlank() && !DETAIL_LABEL_INFO.equals(title) && !DETAIL_LABEL_VIDEO.equals(title)) {
+                titles.add(title);
+            }
         }
-        return nums;
+        return titles.isEmpty() ? null : String.join(SLASH_SEPARATOR, titles);
+    }
+
+    private String cellTextJsoup(Elements cells, int index) {
+        if (index < 0 || index >= cells.size()) return null;
+        String text = cells.get(index).text().trim();
+        return text.isBlank() ? null : text;
+    }
+
+    private String cellTitleTextJsoup(Elements cells, int index) {
+        if (index < 0 || index >= cells.size()) return null;
+        return extractTitleTextJsoup(cells.get(index));
+    }
+
+    private Object resolveZhcwDetailValueJsoup(String type, Elements cells, int index) {
+        Map<String, String> links = buildZhcwDetailLinks(type);
+        String extraText = firstNonBlank(cellTitleTextJsoup(cells, index), cellTextJsoup(cells, index));
+        if (links.isEmpty()) {
+            return extraText;
+        }
+        Map<String, Object> detail = new LinkedHashMap<>();
+        if (extraText != null && !extraText.isBlank()) {
+            detail.put("text", extraText);
+        }
+        detail.put("links", links);
+        return detail;
+    }
+
+    private Object buildFc3dDetailValueJsoup(Elements cells) {
+        Object baseDetail = resolveZhcwDetailValueJsoup("fc3d", cells, 8);
+        String extraText = joinNonBlank(DETAIL_SEPARATOR,
+                prefixedValue("组选6:", cellTextJsoup(cells, 5)),
+                prefixedValue("返奖比例:", cellTextJsoup(cells, 7)));
+        return mergeDetailValue(baseDetail, extraText);
+    }
+
+    private String buildZhcwExtraInfoJsoup(String type, Elements cells) {
+        return switch (type) {
+            case "ssq", "qlc" -> buildExtraInfo(
+                    cellTextJsoup(cells, 3),
+                    cellTextJsoup(cells, 4),
+                    cellTextJsoup(cells, 5),
+                    resolveZhcwDetailValueJsoup(type, cells, 6));
+            case "fc3d" -> buildExtraInfo(
+                    cellTextJsoup(cells, 6),
+                    cellTextJsoup(cells, 3),
+                    cellTextJsoup(cells, 4),
+                    buildFc3dDetailValueJsoup(cells));
+            default -> null;
+        };
+    }
+
+    /**
+     * 使用 Jsoup 从分页链接中提取最大页码
+     */
+    private int extractLastPageNoFromDoc(Document doc) {
+        int lastPage = 0;
+        Elements links = doc.select("a[href]");
+        for (Element link : links) {
+            String href = link.attr("href");
+            Matcher matcher = PAGE_NUM_PATTERN.matcher(href);
+            if (matcher.find()) {
+                lastPage = Math.max(lastPage, Integer.parseInt(matcher.group(1)));
+            }
+        }
+        // 也检查文本内容中的页码
+        Elements pageSpans = doc.select("span, a");
+        for (Element el : pageSpans) {
+            String text = el.text().trim();
+            if (text.matches("\\d+")) {
+                try {
+                    int num = Integer.parseInt(text);
+                    if (num > 0 && num < 10000) {
+                        lastPage = Math.max(lastPage, num);
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return lastPage;
     }
 
     private String formatZhcwNumbers(String type, List<String> nums) {
@@ -1076,15 +1079,6 @@ public class FetchServiceImpl implements FetchService {
         }
         String trimmed = raw.trim();
         return trimmed.length() >= 10 ? trimmed.substring(0, 10) : trimmed;
-    }
-
-    private int extractLastPageNo(String html) {
-        int lastPage = 0;
-        Matcher matcher = PAGE_NUM_PATTERN.matcher(html);
-        while (matcher.find()) {
-            lastPage = Math.max(lastPage, Integer.parseInt(matcher.group(1)));
-        }
-        return lastPage;
     }
 
     private void sleepQuietly(long millis) {

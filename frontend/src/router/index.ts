@@ -1,6 +1,6 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
-const routes = [
+const routes: RouteRecordRaw[] = [
   { path: '/', name: 'Dashboard', component: () => import('../views/Dashboard.vue') },
   { path: '/admin', name: 'Admin', component: () => import('../views/Admin.vue') },
   { path: '/history', name: 'FetchHistory', component: () => import('../views/FetchHistory.vue') },
@@ -11,5 +11,5 @@ const routes = [
 
 export default createRouter({
   history: createWebHistory(),
-  routes
+  routes,
 })
