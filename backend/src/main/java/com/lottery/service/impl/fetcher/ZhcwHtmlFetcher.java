@@ -63,7 +63,7 @@ public class ZhcwHtmlFetcher {
      * @return [totalFetched, inserted, updated]
      */
     public int[] fetch(String type, Integer limitCount, String cutoffDate, boolean fetchAll,
-                       ProgressCallback progressCallback) {
+                       FetchProgressCallback progressCallback) {
         String pageUrlPattern = switch (type) {
             case "ssq" -> "https://kaijiang.zhcw.com/zhcw/inc/ssq/ssq_wqhg.jsp?pageNum=%d";
             case "fc3d" -> "https://kaijiang.zhcw.com/zhcw/inc/3d/3d_wqhg.jsp?pageNum=%d";
