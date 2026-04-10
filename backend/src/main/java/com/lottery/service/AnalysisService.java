@@ -90,48 +90,48 @@ public class AnalysisService {
         ParsedSsq prev = null;
         for (int idx = 0; idx < rows.size(); idx++) {
             ParsedSsq p = LotteryNumberUtils.parseSsq(rows.get(idx).getNumbers());
-            for (int r : p.reds) redFreq[r]++;
-            for (int b : p.blue) blueFreq[b]++;
+            for (int r : p.reds()) redFreq[r]++;
+            for (int b : p.blue()) blueFreq[b]++;
 
-            int sum = Arrays.stream(p.reds).sum();
+            int sum = Arrays.stream(p.reds()).sum();
             sums.add(sum);
             sumTails.add(sum % 10);
             sumTailDist.merge(sum % 10, 1, Integer::sum);
 
-            int span = p.reds[p.reds.length - 1] - p.reds[0];
+            int span = p.reds()[p.reds().length - 1] - p.reds()[0];
             spans.add(span);
             spanDist.merge(span, 1, Integer::sum);
 
-            int ac = LotteryNumberUtils.calcAC(p.reds);
+            int ac = LotteryNumberUtils.calcAC(p.reds());
             acValues.add(ac);
             acDist.merge(ac, 1, Integer::sum);
 
-            int consec = LotteryNumberUtils.countConsecutive(p.reds);
+            int consec = LotteryNumberUtils.countConsecutive(p.reds());
             consecutiveCounts.add(consec);
             consecutiveDist.merge(consec, 1, Integer::sum);
 
-            long odds = Arrays.stream(p.reds).filter(r -> r % 2 == 1).count();
+            long odds = Arrays.stream(p.reds()).filter(r -> r % 2 == 1).count();
             oddEven.merge(odds + ":" + (6 - odds), 1, Integer::sum);
 
-            long bigs = Arrays.stream(p.reds).filter(r -> r >= 17).count();
+            long bigs = Arrays.stream(p.reds()).filter(r -> r >= 17).count();
             sizeRatio.merge(bigs + ":" + (6 - bigs), 1, Integer::sum);
 
-            long primes = Arrays.stream(p.reds).filter(PRIMES::contains).count();
+            long primes = Arrays.stream(p.reds()).filter(PRIMES::contains).count();
             primeComposite.merge(primes + ":" + (6 - primes), 1, Integer::sum);
 
-            long mod0 = Arrays.stream(p.reds).filter(r -> r % 3 == 0).count();
-            long mod1 = Arrays.stream(p.reds).filter(r -> r % 3 == 1).count();
-            long mod2 = Arrays.stream(p.reds).filter(r -> r % 3 == 2).count();
+            long mod0 = Arrays.stream(p.reds()).filter(r -> r % 3 == 0).count();
+            long mod1 = Arrays.stream(p.reds()).filter(r -> r % 3 == 1).count();
+            long mod2 = Arrays.stream(p.reds()).filter(r -> r % 3 == 2).count();
             mod012.merge(mod0 + ":" + mod1 + ":" + mod2, 1, Integer::sum);
 
-            long z1 = Arrays.stream(p.reds).filter(r -> r <= 11).count();
-            long z2 = Arrays.stream(p.reds).filter(r -> r >= 12 && r <= 22).count();
-            long z3 = Arrays.stream(p.reds).filter(r -> r >= 23).count();
+            long z1 = Arrays.stream(p.reds()).filter(r -> r <= 11).count();
+            long z2 = Arrays.stream(p.reds()).filter(r -> r >= 12 && r <= 22).count();
+            long z3 = Arrays.stream(p.reds()).filter(r -> r >= 23).count();
             zoneRatio3.merge(z1 + ":" + z2 + ":" + z3, 1, Integer::sum);
 
             if (prev != null) {
-                Set<Integer> prevSet = Arrays.stream(prev.reds).boxed().collect(Collectors.toSet());
-                int repeats = (int) Arrays.stream(p.reds).filter(prevSet::contains).count();
+                Set<Integer> prevSet = Arrays.stream(prev.reds()).boxed().collect(Collectors.toSet());
+                int repeats = (int) Arrays.stream(p.reds()).filter(prevSet::contains).count();
                 totalRepeatCount += repeats;
             }
             prev = p;
@@ -224,48 +224,48 @@ public class AnalysisService {
         ParsedDlt prev = null;
         for (LotteryResult row : rows) {
             ParsedDlt p = LotteryNumberUtils.parseDlt(row.getNumbers());
-            for (int f : p.front) frontFreq[f]++;
-            for (int b : p.back) backFreq[b]++;
+            for (int f : p.front()) frontFreq[f]++;
+            for (int b : p.back()) backFreq[b]++;
 
-            int sum = Arrays.stream(p.front).sum();
+            int sum = Arrays.stream(p.front()).sum();
             frontSums.add(sum);
             sumTails.add(sum % 10);
             sumTailDist.merge(sum % 10, 1, Integer::sum);
 
-            int span = p.front[p.front.length - 1] - p.front[0];
+            int span = p.front()[p.front().length - 1] - p.front()[0];
             frontSpans.add(span);
             spanDist.merge(span, 1, Integer::sum);
 
-            int ac = LotteryNumberUtils.calcAC(p.front);
+            int ac = LotteryNumberUtils.calcAC(p.front());
             frontACs.add(ac);
             acDist.merge(ac, 1, Integer::sum);
 
-            int consec = LotteryNumberUtils.countConsecutive(p.front);
+            int consec = LotteryNumberUtils.countConsecutive(p.front());
             frontConsecs.add(consec);
             consecutiveDist.merge(consec, 1, Integer::sum);
 
-            long odds = Arrays.stream(p.front).filter(f -> f % 2 == 1).count();
+            long odds = Arrays.stream(p.front()).filter(f -> f % 2 == 1).count();
             oddEven.merge(odds + ":" + (5 - odds), 1, Integer::sum);
 
-            long bigs = Arrays.stream(p.front).filter(f -> f >= 18).count();
+            long bigs = Arrays.stream(p.front()).filter(f -> f >= 18).count();
             sizeRatio.merge(bigs + ":" + (5 - bigs), 1, Integer::sum);
 
-            long primes = Arrays.stream(p.front).filter(PRIMES::contains).count();
+            long primes = Arrays.stream(p.front()).filter(PRIMES::contains).count();
             primeComposite.merge(primes + ":" + (5 - primes), 1, Integer::sum);
 
-            long mod0 = Arrays.stream(p.front).filter(f -> f % 3 == 0).count();
-            long mod1 = Arrays.stream(p.front).filter(f -> f % 3 == 1).count();
-            long mod2 = Arrays.stream(p.front).filter(f -> f % 3 == 2).count();
+            long mod0 = Arrays.stream(p.front()).filter(f -> f % 3 == 0).count();
+            long mod1 = Arrays.stream(p.front()).filter(f -> f % 3 == 1).count();
+            long mod2 = Arrays.stream(p.front()).filter(f -> f % 3 == 2).count();
             mod012.merge(mod0 + ":" + mod1 + ":" + mod2, 1, Integer::sum);
 
-            long z1 = Arrays.stream(p.front).filter(f -> f <= 12).count();
-            long z2 = Arrays.stream(p.front).filter(f -> f >= 13 && f <= 24).count();
-            long z3 = Arrays.stream(p.front).filter(f -> f >= 25).count();
+            long z1 = Arrays.stream(p.front()).filter(f -> f <= 12).count();
+            long z2 = Arrays.stream(p.front()).filter(f -> f >= 13 && f <= 24).count();
+            long z3 = Arrays.stream(p.front()).filter(f -> f >= 25).count();
             zoneRatio3.merge(z1 + ":" + z2 + ":" + z3, 1, Integer::sum);
 
             if (prev != null) {
-                Set<Integer> prevSet = Arrays.stream(prev.front).boxed().collect(Collectors.toSet());
-                int repeats = (int) Arrays.stream(p.front).filter(prevSet::contains).count();
+                Set<Integer> prevSet = Arrays.stream(prev.front()).boxed().collect(Collectors.toSet());
+                int repeats = (int) Arrays.stream(p.front()).filter(prevSet::contains).count();
                 totalRepeatCount += repeats;
             }
             prev = p;
@@ -535,20 +535,20 @@ public class AnalysisService {
             m.put("drawNum", row.getDrawNum());
             m.put("drawDate", row.getDrawDate());
             m.put("numbers", row.getNumbers());
-            m.put("sum", Arrays.stream(p.reds).sum());
-            m.put("span", p.reds[p.reds.length - 1] - p.reds[0]);
-            m.put("ac", LotteryNumberUtils.calcAC(p.reds));
-            m.put("consecutive", LotteryNumberUtils.countConsecutive(p.reds));
-            m.put("oddCount", (int) Arrays.stream(p.reds).filter(r -> r % 2 == 1).count());
-            m.put("bigCount", (int) Arrays.stream(p.reds).filter(r -> r >= 17).count());
-            m.put("primeCount", (int) Arrays.stream(p.reds).filter(PRIMES::contains).count());
-            m.put("zone1", (int) Arrays.stream(p.reds).filter(r -> r <= 11).count());
-            m.put("zone2", (int) Arrays.stream(p.reds).filter(r -> r >= 12 && r <= 22).count());
-            m.put("zone3", (int) Arrays.stream(p.reds).filter(r -> r >= 23).count());
-            m.put("blue", p.blue.length > 0 ? p.blue[0] : 0);
+            m.put("sum", Arrays.stream(p.reds()).sum());
+            m.put("span", p.reds()[p.reds().length - 1] - p.reds()[0]);
+            m.put("ac", LotteryNumberUtils.calcAC(p.reds()));
+            m.put("consecutive", LotteryNumberUtils.countConsecutive(p.reds()));
+            m.put("oddCount", (int) Arrays.stream(p.reds()).filter(r -> r % 2 == 1).count());
+            m.put("bigCount", (int) Arrays.stream(p.reds()).filter(r -> r >= 17).count());
+            m.put("primeCount", (int) Arrays.stream(p.reds()).filter(PRIMES::contains).count());
+            m.put("zone1", (int) Arrays.stream(p.reds()).filter(r -> r <= 11).count());
+            m.put("zone2", (int) Arrays.stream(p.reds()).filter(r -> r >= 12 && r <= 22).count());
+            m.put("zone3", (int) Arrays.stream(p.reds()).filter(r -> r >= 23).count());
+            m.put("blue", p.blue().length > 0 ? p.blue()[0] : 0);
             if (prev != null) {
-                Set<Integer> prevSet = Arrays.stream(prev.reds).boxed().collect(Collectors.toSet());
-                m.put("repeats", (int) Arrays.stream(p.reds).filter(prevSet::contains).count());
+                Set<Integer> prevSet = Arrays.stream(prev.reds()).boxed().collect(Collectors.toSet());
+                m.put("repeats", (int) Arrays.stream(p.reds()).filter(prevSet::contains).count());
             }
             trend.add(m);
             prev = p;
@@ -565,15 +565,15 @@ public class AnalysisService {
             m.put("drawNum", row.getDrawNum());
             m.put("drawDate", row.getDrawDate());
             m.put("numbers", row.getNumbers());
-            m.put("frontSum", Arrays.stream(p.front).sum());
-            m.put("frontSpan", p.front[p.front.length - 1] - p.front[0]);
-            m.put("frontAC", LotteryNumberUtils.calcAC(p.front));
-            m.put("frontOdd", (int) Arrays.stream(p.front).filter(f -> f % 2 == 1).count());
-            m.put("frontPrime", (int) Arrays.stream(p.front).filter(PRIMES::contains).count());
-            m.put("backSum", Arrays.stream(p.back).sum());
+            m.put("frontSum", Arrays.stream(p.front()).sum());
+            m.put("frontSpan", p.front()[p.front().length - 1] - p.front()[0]);
+            m.put("frontAC", LotteryNumberUtils.calcAC(p.front()));
+            m.put("frontOdd", (int) Arrays.stream(p.front()).filter(f -> f % 2 == 1).count());
+            m.put("frontPrime", (int) Arrays.stream(p.front()).filter(PRIMES::contains).count());
+            m.put("backSum", Arrays.stream(p.back()).sum());
             if (prev != null) {
-                Set<Integer> prevSet = Arrays.stream(prev.front).boxed().collect(Collectors.toSet());
-                m.put("repeats", (int) Arrays.stream(p.front).filter(prevSet::contains).count());
+                Set<Integer> prevSet = Arrays.stream(prev.front()).boxed().collect(Collectors.toSet());
+                m.put("repeats", (int) Arrays.stream(p.front()).filter(prevSet::contains).count());
             }
             trend.add(m);
             prev = p;

@@ -309,16 +309,6 @@ public class ZhcwHtmlFetcher {
         return extractTitleText(cells.get(index));
     }
 
-    private void flushBatch(List<LotteryResult> batch, AtomicInteger inserted, AtomicInteger updated) {
-        if (batch.isEmpty()) return;
-        for (LotteryResult result : batch) {
-            LotteryResultService.SaveOutcome outcome = resultService.saveReal(result);
-            if (outcome == LotteryResultService.SaveOutcome.INSERTED) inserted.incrementAndGet();
-            else if (outcome == LotteryResultService.SaveOutcome.UPDATED) updated.incrementAndGet();
-        }
-        batch.clear();
-    }
-
     // ===== 工具方法 (委托 FetcherUtils) =====
 
     private void flushBatch(List<LotteryResult> batch, AtomicInteger inserted, AtomicInteger updated) {
