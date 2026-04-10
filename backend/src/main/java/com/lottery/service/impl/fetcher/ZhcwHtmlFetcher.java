@@ -359,7 +359,4 @@ public class ZhcwHtmlFetcher {
             throw new IllegalStateException("等待中断", e);
         }
     }
-
-        void onProgress(int currentPage, int totalFetched, int inserted, int updated);
-    }
 }
