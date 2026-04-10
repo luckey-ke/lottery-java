@@ -453,19 +453,6 @@ public class RecommendationService {
         return list.size() <= n ? list : list.subList(list.size() - n, list.size());
     }
 
-    private List<Integer> topNIndices(int[] freq, int min, int max, int n, boolean hot) {
-        List<int[]> items = new ArrayList<>();
-        for (int i = min; i <= max; i++) items.add(new int[]{i, freq[i]});
-        items.sort(hot
-                ? (a, b) -> Integer.compare(b[1], a[1])
-                : (a, b) -> Integer.compare(a[1], b[1]));
-        return items.subList(0, Math.min(n, items.size())).stream().map(a -> a[0]).toList();
-    }
-
-    private int calcAC(List<Integer> nums) {
-        return LotteryNumberUtils.calcAC(nums.stream().mapToInt(Integer::intValue).toArray());
-    }
-
     // ============================================================
     //  频率/遗漏/统计 (委托 StatisticsUtils)
     // ============================================================
