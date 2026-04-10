@@ -20,14 +20,19 @@ function getGlobal() {
   return import('../composables/useGlobal').then(m => m.useGlobal())
 }
 
-// 响应拦截器 - 统一错误处理 + 全局 loading + toast
+// 请求拦截器 — 附带 JWT Token + Loading
 api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('lottery_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
   if (config.timeout !== 0) {
     getGlobal().then(g => g.startLoading())
   }
   return config
 })
 
+// 响应拦截器 — 错误处理 + 401 自动清登录状态
 api.interceptors.response.use(
   (response) => {
     if (response.config.timeout !== 0) {
@@ -45,7 +50,13 @@ api.interceptors.response.use(
     const message = data?.error || data?.message || error.message
 
     if (status === 401) {
-      getGlobal().then(g => g.showToast('未授权，请检查 Token 配置', 'error'))
+      // Token 过期或无效，清除登录状态
+      localStorage.removeItem('lottery_token')
+      localStorage.removeItem('lottery_refresh_token')
+      localStorage.removeItem('lottery_user')
+      getGlobal().then(g => g.showToast('登录已过期，请重新登录', 'error'))
+    } else if (status === 403) {
+      getGlobal().then(g => g.showToast('权限不足，需要管理员权限', 'error'))
     } else if (status === 400) {
       getGlobal().then(g => g.showToast(message || '请求参数错误', 'warning'))
     } else if (status === 404) {
@@ -70,19 +81,38 @@ function withParams(params: Record<string, unknown>): Record<string, unknown> {
   )
 }
 
-// ========== API 方法 ==========
+// ========== 认证 API ==========
+const authApi = axios.create({ baseURL: '/api/auth', timeout: 15000 })
 
 export default {
-  // 状态
+  // ===== 认证 =====
+  login: (username: string, password: string) =>
+    authApi.post('/login', { username, password }),
+  register: (username: string, password: string, nickname?: string, inviteCode?: string) =>
+    authApi.post('/register', withParams({ username, password, nickname, inviteCode })),
+  refreshToken: (refreshToken: string) =>
+    authApi.post('/refresh', { refreshToken }),
+  me: () => authApi.get('/me', {
+    headers: { Authorization: `Bearer ${localStorage.getItem('lottery_token')}` }
+  }),
+  authConfig: () => authApi.get('/config'),
+
+  // ===== 管理员 =====
+  listUsers: (limit = 20, offset = 0): Promise<AxiosResponse<{ data: any[]; total: number }>> =>
+    api.get('/auth/users', { params: { limit, offset } }),
+  updateUserRole: (id: number, role: string) =>
+    api.put(`/auth/users/${id}/role`, { role }),
+
+  // ===== 状态 =====
   status: (): Promise<AxiosResponse<LotteryStatus>> => api.get('/status'),
 
-  // 查询
+  // ===== 查询 =====
   results: (type: string, limit = 20, offset = 0): Promise<AxiosResponse<{ data: LotteryResult[]; total: number }>> =>
     api.get('/results', { params: { type, limit, offset } }),
   latest: (type: string): Promise<AxiosResponse<{ type: string; latestDrawNum: string }>> =>
     api.get('/latest', { params: { type } }),
 
-  // 拉取
+  // ===== 拉取（需要 ADMIN） =====
   fetchAll: (scope = 'latest-1', count?: number): Promise<AxiosResponse<FetchTaskInfo>> =>
     api.post('/fetch', null, { params: withParams({ scope, count }), timeout: 0 }),
   fetchOne: (type: string, scope = 'latest-1', count?: number): Promise<AxiosResponse<FetchTaskInfo>> =>
@@ -94,7 +124,7 @@ export default {
   fetchHistoryDetail: (taskId: string): Promise<AxiosResponse<FetchHistoryDetail>> =>
     api.get(`/fetch/history/${taskId}`),
 
-  // 分析
+  // ===== 分析 =====
   analyze: (type: string): Promise<AxiosResponse<AnalysisData>> =>
     api.get('/analyze', { params: { type } }),
   analyzeAll: (): Promise<AxiosResponse<Record<string, AnalysisData>>> =>
@@ -102,7 +132,7 @@ export default {
   trend: (type: string, n = 30): Promise<AxiosResponse<TrendData>> =>
     api.get('/trend', { params: { type, n } }),
 
-  // 推荐
+  // ===== 推荐 =====
   recommend: (type: string): Promise<AxiosResponse<RecommendData>> =>
     api.get('/recommend', { params: { type } }),
   recommendHistory: (type: string, limit = 20, offset = 0): Promise<AxiosResponse<RecommendHistoryResponse>> =>

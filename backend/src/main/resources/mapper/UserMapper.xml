@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lottery.mapper.UserMapper">
+
+    <select id="findByUsername" resultType="com.lottery.entity.User">
+        SELECT id, username, password, role, nickname, created_at, updated_at
+        FROM sys_user
+        WHERE username = #{username}
+        LIMIT 1
+    </select>
+
+    <select id="existsByUsername" resultType="int">
+        SELECT COUNT(1) FROM sys_user WHERE username = #{username}
+    </select>
+
+</mapper>

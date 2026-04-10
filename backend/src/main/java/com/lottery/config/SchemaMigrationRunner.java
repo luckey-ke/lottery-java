@@ -34,6 +34,7 @@ public class SchemaMigrationRunner {
         ensureFetchHistoryDetailTable();
         ensureFetchHistoryIndexes();
         ensureRecommendationHistoryTable();
+        ensureSysUserTable();
     }
 
     // ===== 数据库类型检测 =====
@@ -230,6 +231,28 @@ public class SchemaMigrationRunner {
             jdbcTemplate.execute(sql);
         } catch (Exception e) {
             log.debug("创建索引跳过（可能已存在）: {}", e.getMessage());
+        }
+    }
+
+    // ===== 用户表 =====
+
+    private void ensureSysUserTable() {
+        try {
+            jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS sys_user (
+                    id          INTEGER PRIMARY KEY %s,
+                    username    TEXT    NOT NULL UNIQUE,
+                    password    TEXT    NOT NULL,
+                    role        TEXT    NOT NULL DEFAULT 'USER',
+                    nickname    TEXT,
+                    created_at  TEXT,
+                    updated_at  TEXT
+                )
+                """.formatted(sqlite ? "AUTOINCREMENT" : "AUTO_INCREMENT"));
+            executeIndex("CREATE INDEX IF NOT EXISTS idx_sys_user_username ON sys_user(username)");
+            log.info("[SchemaMigration] sys_user 表就绪");
+        } catch (Exception e) {
+            log.warn("[SchemaMigration] sys_user 表创建失败: {}", e.getMessage());
         }
     }
 }
