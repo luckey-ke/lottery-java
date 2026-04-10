@@ -32,6 +32,8 @@ public class ZhcwJsonFetcher {
     private static final int PAGE_SIZE = 200;
     private static final int FETCH_BATCH_SIZE = 200;
     private static final long PAGE_DELAY_MS = 600;
+    private static final int MAX_PAGE_RETRIES = 3;
+    private static final long PAGE_RETRY_BASE_DELAY_MS = 3000;
 
     private static final String EXTRA_KEY_SALES_AMOUNT = "salesAmount";
     private static final String EXTRA_KEY_FIRST_PRIZE = "firstPrize";
@@ -75,6 +77,7 @@ public class ZhcwJsonFetcher {
         List<LotteryResult> batch = new ArrayList<>();
         Set<String> seen = new TreeSet<>();
         int pageNo = 1;
+        int pageRetryCount = 0;
         String referer = "https://www.zhcw.com/kjxx/" + type + "/";
         boolean stop = false;
 
@@ -131,6 +134,7 @@ public class ZhcwJsonFetcher {
                     progressCallback.onProgress(pageNo, total.get(), inserted.get(), updated.get());
                 }
                 if (total.get() == before) break;
+                pageRetryCount = 0;
 
                 int totalPages = resolveTotalPages(root);
                 if (totalPages > 0 && pageNo >= totalPages) break;
@@ -138,6 +142,14 @@ public class ZhcwJsonFetcher {
                 sleepQuietly(PAGE_DELAY_MS);
 
             } catch (Exception e) {
+                if (isRecoverable(e) && pageRetryCount < MAX_PAGE_RETRIES) {
+                    pageRetryCount++;
+                    long delay = PAGE_RETRY_BASE_DELAY_MS * (1L << (pageRetryCount - 1));
+                    log.warn("中彩网JSON请求失败 ({}) 第 {}/{}, {}ms 后重试: {}",
+                            type, pageRetryCount, MAX_PAGE_RETRIES, delay, e.getMessage());
+                    sleepQuietly(delay);
+                    continue;
+                }
                 log.warn("中彩网JSON请求失败 ({}): {}", type, e.getMessage());
                 break;
             }
@@ -168,6 +180,7 @@ public class ZhcwJsonFetcher {
         List<LotteryResult> batch = new ArrayList<>();
         Set<String> seen = new TreeSet<>();
         int pageNo = 1;
+        int pageRetryCount = 0;
         boolean stop = false;
 
         while (!stop) {
@@ -216,6 +229,7 @@ public class ZhcwJsonFetcher {
                     progressCallback.onProgress(pageNo, total.get(), inserted.get(), updated.get());
                 }
                 if (total.get() == before) break;
+                pageRetryCount = 0;
 
                 int totalPages = root.path("value").path("pages").asInt(0);
                 int pgSize = root.path("value").path("pageSize").asInt(PAGE_SIZE);
@@ -223,6 +237,14 @@ public class ZhcwJsonFetcher {
                 pageNo++;
 
             } catch (Exception e) {
+                if (isRecoverable(e) && pageRetryCount < MAX_PAGE_RETRIES) {
+                    pageRetryCount++;
+                    long delay = PAGE_RETRY_BASE_DELAY_MS * (1L << (pageRetryCount - 1));
+                    log.warn("体彩接口请求失败 ({}) 第 {}/{}, {}ms 后重试: {}",
+                            type, pageRetryCount, MAX_PAGE_RETRIES, delay, e.getMessage());
+                    sleepQuietly(delay);
+                    continue;
+                }
                 log.warn("体彩接口请求失败 ({}): {}", type, e.getMessage());
                 break;
             }
@@ -492,5 +514,20 @@ public class ZhcwJsonFetcher {
 
     private void sleepQuietly(long millis) {
         FetcherUtils.sleepQuietly(millis);
+    }
+
+    /** 判断是否为可恢复的网络错误（5xx、超时、连接拒绝等） */
+    private boolean isRecoverable(Exception e) {
+        String msg = e.getMessage();
+        if (msg != null && msg.startsWith("HTTP ")) {
+            try {
+                int status = Integer.parseInt(msg.substring(5).trim());
+                return status >= 500;
+            } catch (NumberFormatException ignored) {}
+        }
+        String className = e.getClass().getSimpleName();
+        return className.contains("Timeout")
+                || className.contains("ConnectException")
+                || className.contains("IOException");
     }
 }

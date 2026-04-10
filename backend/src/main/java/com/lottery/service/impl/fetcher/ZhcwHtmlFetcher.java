@@ -33,6 +33,8 @@ public class ZhcwHtmlFetcher {
     private static final long PAGE_DELAY_MS = 1200;
     private static final long RETRY_DELAY_MS = 2000;
     private static final int MAX_EMPTY_RETRIES = 3;
+    private static final int MAX_PAGE_RETRIES = 3;
+    private static final long PAGE_RETRY_BASE_DELAY_MS = 3000;
 
     private static final String DETAIL_LABEL_INFO = "详细信息";
     private static final String DETAIL_LABEL_VIDEO = "开奖视频";
@@ -79,6 +81,7 @@ public class ZhcwHtmlFetcher {
         Set<String> seen = new TreeSet<>();
         int pageNo = 1;
         int emptyRetryCount = 0;
+        int pageRetryCount = 0;
         boolean stop = false;
 
         while (!stop) {
@@ -106,6 +109,7 @@ public class ZhcwHtmlFetcher {
                     break;
                 }
                 emptyRetryCount = 0;
+                pageRetryCount = 0;
 
                 for (LotteryResult result : pageResults) {
                     if (!fetchAll && cutoffDate != null && result.getDrawDate().compareTo(cutoffDate) < 0) {
@@ -138,6 +142,14 @@ public class ZhcwHtmlFetcher {
                 sleepQuietly(PAGE_DELAY_MS);
 
             } catch (Exception e) {
+                if (isRecoverable(e) && pageRetryCount < MAX_PAGE_RETRIES) {
+                    pageRetryCount++;
+                    long delay = PAGE_RETRY_BASE_DELAY_MS * (1L << (pageRetryCount - 1));
+                    log.warn("中彩网页面请求失败 ({}) 第 {}/{}, {}ms 后重试: {}", 
+                            type, pageRetryCount, MAX_PAGE_RETRIES, delay, e.getMessage());
+                    sleepQuietly(delay);
+                    continue;
+                }
                 log.warn("中彩网页面请求失败 ({}) : {}", type, e.getMessage(), e);
                 break;
             }
@@ -347,5 +359,17 @@ public class ZhcwHtmlFetcher {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("等待中断", e);
         }
+    }
+
+    /** 判断是否为可恢复的网络错误（5xx、超时、连接拒绝等） */
+    private boolean isRecoverable(Exception e) {
+        if (e instanceof org.jsoup.HttpStatusException httpEx) {
+            int status = httpEx.getStatusCode();
+            return status >= 500;
+        }
+        String msg = e.getClass().getSimpleName();
+        return msg.contains("SocketTimeout")
+                || msg.contains("ConnectException")
+                || msg.contains("IOException");
     }
 }
