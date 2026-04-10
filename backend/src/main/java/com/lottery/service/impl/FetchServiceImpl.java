@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,6 +30,7 @@ import java.util.concurrent.Future;
 public class FetchServiceImpl implements FetchService {
 
     private static final int FETCH_ALL_THREAD_COUNT = 6;
+    private static final DateTimeFormatter TASK_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final FetchHistoryService fetchHistoryService;
     private final ZhcwHtmlFetcher zhcwHtmlFetcher;
@@ -69,17 +71,17 @@ public class FetchServiceImpl implements FetchService {
 
     @Override
     public Map<String, Object> startFetchAllTask(String scope, Integer count) {
-        FetchScope fs = resolveScope(scope, count);
-        FetchTask task = taskManager.createTask("all", fs.scope(), "concurrent-by-type", "manual", LotteryType.values().length);
-        taskExecutor.submit(() -> executeAllTask(task, fs));
+        FetchScope fetchScope = resolveScope(scope, count);
+        FetchTask task = taskManager.createTask("all", fetchScope.getScope(), "concurrent-by-type", "manual", LotteryType.values().length);
+        taskExecutor.submit(() -> executeAllTask(task, fetchScope));
         return task.toMap();
     }
 
     @Override
     public Map<String, Object> startFetchTask(String lotteryType, String scope, Integer count) {
-        FetchScope fs = resolveScope(scope, count);
-        FetchTask task = taskManager.createTask(lotteryType, fs.scope(), "single", "manual", 1);
-        taskExecutor.submit(() -> executeSingleTask(task, lotteryType, fs));
+        FetchScope fetchScope = resolveScope(scope, count);
+        FetchTask task = taskManager.createTask(lotteryType, fetchScope.getScope(), "single", "manual", 1);
+        taskExecutor.submit(() -> executeSingleTask(task, lotteryType, fetchScope));
         return task.toMap();
     }
 
@@ -104,9 +106,9 @@ public class FetchServiceImpl implements FetchService {
 
     @Override
     public void fetchLatest() {
-        FetchScope fs = resolveScope("latest-1", 1);
-        FetchTask task = taskManager.createTask("all", fs.scope(), "concurrent-by-type", "scheduled", LotteryType.values().length);
-        taskExecutor.submit(() -> executeAllTask(task, fs));
+        FetchScope fetchScope = resolveScope("latest-1", 1);
+        FetchTask task = taskManager.createTask("all", fetchScope.getScope(), "concurrent-by-type", "scheduled", LotteryType.values().length);
+        taskExecutor.submit(() -> executeAllTask(task, fetchScope));
     }
 
     // ===== 任务执行 =====
@@ -116,7 +118,7 @@ public class FetchServiceImpl implements FetchService {
             task.markRunning(lotteryType);
             taskManager.persist(task);
             Map<String, Object> result = runFetch(lotteryType, scope, task);
-            task.markCompleted(String.valueOf(result.get("status")), result);
+            task.markCompleted(stringValue(result.get("status")), result);
             taskManager.persist(task);
         } catch (Exception e) {
             log.error("抓取任务 [{}] 执行失败: {}", task.getTaskId(), e.getMessage(), e);
@@ -130,7 +132,7 @@ public class FetchServiceImpl implements FetchService {
             task.markRunning("all");
             taskManager.persist(task);
             Map<String, Object> result = runFetchAll(scope, task);
-            task.markCompleted(String.valueOf(result.get("status")), result);
+            task.markCompleted(stringValue(result.get("status")), result);
             taskManager.persist(task);
         } catch (Exception e) {
             log.error("抓取全部任务 [{}] 执行失败: {}", task.getTaskId(), e.getMessage(), e);
@@ -141,37 +143,41 @@ public class FetchServiceImpl implements FetchService {
 
     // ===== 核心调度 =====
 
-    private Map<String, Object> runFetchAll(FetchScope scope, FetchTask task) {
+    private Map<String, Object> runFetchAll(FetchScope fetchScope, FetchTask task) {
         Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("scope", scope.scope());
+        summary.put("scope", fetchScope.getScope());
         summary.put("mode", "concurrent-by-type");
 
         ExecutorService executor = Executors.newFixedThreadPool(
                 Math.min(FETCH_ALL_THREAD_COUNT, LotteryType.values().length));
-        Map<LotteryType, Future<int[]>> futures = new LinkedHashMap<>();
+        Map<LotteryType, Future<Map<String, Object>>> futures = new LinkedHashMap<>();
         boolean hasError = false;
-        int totalFetched = 0, inserted = 0, updated = 0;
+        int totalFetched = 0;
+        int inserted = 0;
+        int updated = 0;
 
         try {
-            for (LotteryType lt : LotteryType.values()) {
-                futures.put(lt, executor.submit(() -> {
-                    Map<String, Object> r = runFetch(lt.getCode(), scope, task);
-                    return new int[]{
-                        asInt(r.get("totalFetched")),
-                        asInt(r.get("inserted")),
-                        asInt(r.get("updated"))
-                    };
-                }));
+            for (LotteryType lotteryType : LotteryType.values()) {
+                futures.put(lotteryType, executor.submit(() -> runFetch(lotteryType.getCode(), fetchScope, task)));
             }
-            for (Map.Entry<LotteryType, Future<int[]>> entry : futures.entrySet()) {
+
+            for (Map.Entry<LotteryType, Future<Map<String, Object>>> entry : futures.entrySet()) {
+                LotteryType lotteryType = entry.getKey();
                 try {
-                    int[] r = entry.getValue().get();
-                    totalFetched += r[0];
-                    inserted += r[1];
-                    updated += r[2];
+                    Map<String, Object> result = entry.getValue().get();
+                    summary.put(lotteryType.getCode(), result);
+                    totalFetched += asInt(result.get("totalFetched"));
+                    inserted += asInt(result.get("inserted"));
+                    updated += asInt(result.get("updated"));
+                    hasError = hasError || "failed".equals(result.get("status"));
                 } catch (Exception e) {
                     hasError = true;
-                    log.error("拉取 [{}] 异常: {}", entry.getKey().getCode(), e.getMessage(), e);
+                    Map<String, Object> errorResult = buildErrorResult(lotteryType.getCode(), fetchScope.getScope(), e.getMessage());
+                    summary.put(lotteryType.getCode(), errorResult);
+                    if (task != null) {
+                        task.recordTypeResult(lotteryType.getCode(), errorResult);
+                    }
+                    log.error("拉取 [{}] 异常: {}", lotteryType.getCode(), e.getMessage(), e);
                 }
             }
         } finally {
@@ -182,11 +188,16 @@ public class FetchServiceImpl implements FetchService {
         summary.put("totalFetched", totalFetched);
         summary.put("inserted", inserted);
         summary.put("updated", updated);
+        summary.put("total", totalFetched);
+        summary.put("new", inserted);
         return summary;
     }
 
     private Map<String, Object> runFetch(String lotteryType, FetchScope scope, FetchTask task) {
-        log.info("开始拉取 [{}] 真实数据, scope={}", lotteryType, scope.scope());
+        log.info("开始拉取 [{}] 真实数据, scope={}", lotteryType, scope.getScope());
+        if (task != null) {
+            task.updateProgress(lotteryType, 0, 0, 0, 0);
+        }
 
         FetchProgressCallback progressCallback = (page, total, ins, upd) -> {
             if (task != null) task.updateProgress(lotteryType, page, total, ins, upd);
@@ -197,14 +208,14 @@ public class FetchServiceImpl implements FetchService {
         try {
             stats = switch (lotteryType) {
                 case "dlt", "pl3", "pl5" -> zhcwJsonFetcher.fetch(
-                        lotteryType, scope.limitCount(), scope.cutoffDate(), scope.all(), progressCallback);
+                        lotteryType, scope.getLimitCount(), scope.getCutoffDateString(), scope.isAll(), progressCallback);
                 case "ssq", "fc3d", "qlc" -> zhcwHtmlFetcher.fetch(
-                        lotteryType, scope.limitCount(), scope.cutoffDate(), scope.all(), progressCallback);
-                default -> throw new IllegalArgumentException("不支持的彩种: " + lotteryType);
+                        lotteryType, scope.getLimitCount(), scope.getCutoffDateString(), scope.isAll(), progressCallback);
+                default -> new int[]{0, 0, 0};
             };
         } catch (Exception e) {
             log.warn("[{}] 真实数据拉取失败: {}", lotteryType, e.getMessage());
-            Map<String, Object> errorResult = buildResult(lotteryType, scope.scope(), 0, 0, 0, e.getMessage());
+            Map<String, Object> errorResult = buildErrorResult(lotteryType, scope.getScope(), e.getMessage());
             if (task != null) task.recordTypeResult(lotteryType, errorResult);
             return errorResult;
         }
@@ -212,8 +223,10 @@ public class FetchServiceImpl implements FetchService {
         log.info("[{}] 真实数据完成: 获取 {} 条, 新增 {} 条, 更新 {} 条",
                 lotteryType, stats[0], stats[1], stats[2]);
 
-        Map<String, Object> result = buildResult(lotteryType, scope.scope(), stats[0], stats[1], stats[2], null);
-        if (task != null) task.recordTypeResult(lotteryType, result);
+        Map<String, Object> result = buildFetchResult(lotteryType, scope.getScope(), stats[0], stats[1], stats[2]);
+        if (task != null) {
+            task.recordTypeResult(lotteryType, result);
+        }
         return result;
     }
 
@@ -221,47 +234,109 @@ public class FetchServiceImpl implements FetchService {
 
     private FetchScope resolveScope(String scope, Integer count) {
         if (count != null && count > 0) {
-            return new FetchScope("latest-" + count, count, null, false);
+            return new FetchScope("latest-" + count, count, null, false, count);
         }
         String normalized = (scope == null || scope.isBlank()) ? "latest-1" : scope.trim();
         return switch (normalized) {
-            case "latest-1" -> new FetchScope(normalized, 1, null, false);
-            case "latest-10" -> new FetchScope(normalized, 10, null, false);
-            case "latest-50" -> new FetchScope(normalized, 50, null, false);
-            case "latest-100" -> new FetchScope(normalized, 100, null, false);
-            case "year-1" -> new FetchScope(normalized, null, LocalDate.now().minusYears(1).toString(), false);
-            case "year-3" -> new FetchScope(normalized, null, LocalDate.now().minusYears(3).toString(), false);
-            case "all" -> new FetchScope(normalized, null, null, true);
+            case "latest-1" -> new FetchScope(normalized, 1, null, false, null);
+            case "latest-10" -> new FetchScope(normalized, 10, null, false, null);
+            case "latest-50" -> new FetchScope(normalized, 50, null, false, null);
+            case "latest-100" -> new FetchScope(normalized, 100, null, false, null);
+            case "year-1" -> new FetchScope(normalized, null, LocalDate.now().minusYears(1).toString(), false, null);
+            case "year-3" -> new FetchScope(normalized, null, LocalDate.now().minusYears(3).toString(), false, null);
+            case "all" -> new FetchScope(normalized, null, null, true, null);
             default -> throw new IllegalArgumentException("不支持的 scope: " + normalized);
         };
     }
 
+    // ===== 构建结果 =====
+
+    private Map<String, Object> buildFetchResult(String lotteryType, String scope, int total, int ins, int upd) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("type", lotteryType);
+        result.put("name", resolveLotteryName(lotteryType));
+        result.put("scope", scope);
+        result.put("status", "success");
+        result.put("currentPage", 0);
+        result.put("page", 0);
+        result.put("totalFetched", total);
+        result.put("total", total);
+        result.put("inserted", ins);
+        result.put("new", ins);
+        result.put("updated", upd);
+        return result;
+    }
+
+    private Map<String, Object> buildErrorResult(String lotteryType, String scope, String errorMessage) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("type", lotteryType);
+        result.put("name", resolveLotteryName(lotteryType));
+        result.put("scope", scope);
+        result.put("status", "failed");
+        result.put("currentPage", 0);
+        result.put("page", 0);
+        result.put("totalFetched", 0);
+        result.put("total", 0);
+        result.put("inserted", 0);
+        result.put("new", 0);
+        result.put("updated", 0);
+        result.put("error", errorMessage);
+        return result;
+    }
+
+    private String resolveLotteryName(String lotteryType) {
+        try {
+            return LotteryType.fromCode(lotteryType).getName();
+        } catch (Exception e) {
+            return lotteryType;
+        }
+    }
+
     // ===== 辅助 =====
 
-    private Map<String, Object> buildResult(String type, String scope, int total, int ins, int upd, String error) {
-        Map<String, Object> r = new LinkedHashMap<>();
-        r.put("type", type);
-        r.put("name", resolveName(type));
-        r.put("scope", scope);
-        r.put("status", error != null ? "failed" : "success");
-        r.put("totalFetched", total);
-        r.put("total", total);
-        r.put("inserted", ins);
-        r.put("new", ins);
-        r.put("updated", upd);
-        if (error != null) r.put("error", error);
-        return r;
+    private int asInt(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value == null) {
+            return 0;
+        }
+        return Integer.parseInt(String.valueOf(value));
     }
 
-    private String resolveName(String type) {
-        try { return LotteryType.fromCode(type).getName(); } catch (Exception e) { return type; }
+    private String stringValue(Object value) {
+        return value == null ? "" : String.valueOf(value);
     }
 
-    private int asInt(Object v) {
-        if (v instanceof Number n) return n.intValue();
-        if (v == null) return 0;
-        return Integer.parseInt(String.valueOf(v));
-    }
+    private record FetchScope(String scope, Integer limitCount, String cutoffDate, boolean all, Integer requestedCount) {
 
-    private record FetchScope(String scope, Integer limitCount, String cutoffDate, boolean all) {}
+        public boolean reachedLimit(int currentSize) {
+            return limitCount != null && currentSize >= limitCount;
+        }
+
+        public boolean isBeforeCutoff(String drawDate) {
+            if (all || cutoffDate == null || drawDate == null || drawDate.isBlank()) {
+                return false;
+            }
+            String normalized = drawDate.trim();
+            normalized = normalized.length() >= 10 ? normalized.substring(0, 10) : normalized;
+            return normalized.compareTo(cutoffDate) < 0;
+        }
+
+        public String getCutoffDateString() {
+            return cutoffDate;
+        }
+
+        public boolean isAll() {
+            return all;
+        }
+
+        public Integer getLimitCount() {
+            return limitCount;
+        }
+
+        public String getScope() {
+            return scope;
+        }
+    }
 }
