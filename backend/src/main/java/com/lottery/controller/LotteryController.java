@@ -1,5 +1,7 @@
 package com.lottery.controller;
 
+import com.lottery.common.BusinessException;
+import com.lottery.entity.LotteryType;
 import com.lottery.service.AnalysisService;
 import com.lottery.service.FetchService;
 import com.lottery.service.LotteryResultService;
@@ -27,7 +29,8 @@ public class LotteryController {
     private final RecommendationService recommendationService;
     private final RecommendationHistoryService recommendationHistoryService;
 
-    /** 查询开奖记录 */
+    // ===== 数据查询 =====
+
     @GetMapping("/results")
     public Map<String, Object> results(
             @RequestParam(required = false) String type,
@@ -39,19 +42,18 @@ public class LotteryController {
         );
     }
 
-    /** 获取某彩种最新期号 */
     @GetMapping("/latest")
     public Map<String, Object> latest(@RequestParam String type) {
+        validateType(type);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("type", type);
         result.put("latestDrawNum", resultService.latestRealDrawNum(type));
         return result;
     }
 
-    /** 数据统计 */
     @GetMapping("/status")
     public Map<String, Object> status() {
-        var types = com.lottery.entity.LotteryType.values();
+        var types = LotteryType.values();
         Map<String, Object> map = new LinkedHashMap<>();
         for (var t : types) {
             var latestResult = resultService.latestRealResult(t.getCode());
@@ -65,7 +67,8 @@ public class LotteryController {
         return map;
     }
 
-    /** 手动拉取全部真实数据 */
+    // ===== 数据拉取 =====
+
     @PostMapping("/fetch")
     public Map<String, Object> fetchAll(
             @RequestParam(defaultValue = "latest-1") String scope,
@@ -73,22 +76,20 @@ public class LotteryController {
         return fetchService.startFetchAllTask(scope, count);
     }
 
-    /** 手动拉取指定彩种真实数据 */
     @PostMapping("/fetch/{type}")
     public Map<String, Object> fetchOne(
             @PathVariable String type,
             @RequestParam(defaultValue = "latest-1") String scope,
             @RequestParam(required = false) Integer count) {
+        validateType(type);
         return fetchService.startFetchTask(type, scope, count);
     }
 
-    /** 查询抓取任务进度 */
     @GetMapping("/fetch/tasks/{taskId}")
     public Map<String, Object> fetchTask(@PathVariable String taskId) {
         return fetchService.getFetchTask(taskId);
     }
 
-    /** 查询抓取历史 */
     @GetMapping("/fetch/history")
     public Map<String, Object> fetchHistory(
             @RequestParam(required = false) String status,
@@ -99,48 +100,64 @@ public class LotteryController {
         return fetchService.listFetchHistory(status, triggerSource, type, limit, offset);
     }
 
-    /** 查询抓取历史详情 */
     @GetMapping("/fetch/history/{taskId}")
     public Map<String, Object> fetchHistoryDetail(@PathVariable String taskId) {
         return fetchService.getFetchHistory(taskId);
     }
 
-    /** 频率统计分析 */
+    // ===== 统计分析 =====
+
     @GetMapping("/analyze")
     public Object analyze(@RequestParam(required = false) String type) {
         if (type != null && !type.isBlank()) {
+            validateType(type);
             return analysisService.analyze(type);
         }
         return analysisService.analyzeAll();
     }
 
-    /** 趋势分析 */
     @GetMapping("/trend")
     public Map<String, Object> trend(
             @RequestParam String type,
             @RequestParam(defaultValue = "30") int n) {
+        validateType(type);
         return analysisService.trend(type, n);
     }
 
-    /** 每日号码推荐 */
+    // ===== 号码推荐 =====
+
     @GetMapping("/recommend")
     public Map<String, Object> recommend(@RequestParam String type) {
+        validateType(type);
         return recommendationService.recommend(type);
     }
 
-    /** 推荐历史记录 */
     @GetMapping("/recommend/history")
     public Map<String, Object> recommendHistory(
             @RequestParam String type,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(defaultValue = "0") int offset) {
+        validateType(type);
         return recommendationHistoryService.listHistory(type, limit, offset);
     }
 
-    /** 推荐命中率统计 */
     @GetMapping("/recommend/stats")
     public Map<String, Object> recommendStats(@RequestParam String type) {
+        validateType(type);
         recommendationHistoryService.autoMatch(type);
         return recommendationHistoryService.getStats(type);
+    }
+
+    // ===== 内部方法 =====
+
+    private void validateType(String type) {
+        if (type == null || type.isBlank()) {
+            throw BusinessException.badRequest("彩种参数不能为空");
+        }
+        try {
+            LotteryType.fromCode(type);
+        } catch (IllegalArgumentException e) {
+            throw BusinessException.badRequest("不支持的彩种: " + type + "，可选值: ssq/dlt/fc3d/pl3/pl5/qlc");
+        }
     }
 }

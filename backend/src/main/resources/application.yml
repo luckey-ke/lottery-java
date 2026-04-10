@@ -2,13 +2,20 @@ server:
   port: 8080
 
 spring:
+  # ===== 定时任务线程池 =====
+  task:
+    scheduling:
+      pool:
+        size: 4
+      thread-name-prefix: lottery-scheduled-
+
   # ===== 默认 SQLite =====
   # 切换 MySQL 只需改下面 datasource 配置即可
   datasource:
     url: jdbc:sqlite:${LOTTERY_DB_PATH:./data/lottery.db}
     driver-class-name: org.sqlite.JDBC
     hikari:
-      maximum-pool-size: 5
+      maximum-pool-size: 10
 
   # ===== MySQL 配置（取消注释即可切换）=====
   # datasource:
@@ -38,3 +45,9 @@ lottery:
   fetch:
     hour: 22
     minute: 30
+  # ===== 鉴权配置 =====
+  # 设置 token 后，写操作（POST /fetch）和推荐接口需携带 Authorization: Bearer {token}
+  # 读取接口（GET /status, /analyze, /results 等）无需鉴权
+  # 留空或不配置则不启用鉴权
+  auth:
+    token: ${LOTTERY_AUTH_TOKEN:}
