@@ -37,7 +37,7 @@ public class RecommendationService {
     private final RecommendationHistoryService historyService;
 
     public Map<String, Object> recommend(String type) {
-        List<LotteryResult> rows = resultService.allNumbers(type);
+        List<LotteryResult> rows = resultService.allRealNumbers(type);
         if (rows.isEmpty()) return Map.of("error", "[" + type + "] 暂无数据，无法推荐");
 
         // 自动匹配历史推荐

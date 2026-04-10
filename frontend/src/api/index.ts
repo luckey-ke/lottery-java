@@ -15,23 +15,49 @@ import type {
 
 const api = axios.create({ baseURL: '/api/lottery', timeout: 30000 })
 
-// 响应拦截器 - 统一错误处理
+// 懒加载全局状态，避免循环依赖
+function getGlobal() {
+  return import('./composables/useGlobal').then(m => m.useGlobal())
+}
+
+// 响应拦截器 - 统一错误处理 + 全局 loading + toast
+api.interceptors.request.use((config) => {
+  if (config.timeout !== 0) {
+    getGlobal().then(g => g.startLoading())
+  }
+  return config
+})
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.config.timeout !== 0) {
+      getGlobal().then(g => g.stopLoading())
+    }
+    return response
+  },
   (error) => {
+    if (error.config?.timeout !== 0) {
+      getGlobal().then(g => g.stopLoading())
+    }
+
     const status = error.response?.status
-    const message = error.response?.data?.error || error.response?.data?.message || error.message
+    const data = error.response?.data
+    const message = data?.error || data?.message || error.message
 
     if (status === 401) {
-      console.error('未授权，请检查 Token 配置')
+      getGlobal().then(g => g.showToast('未授权，请检查 Token 配置', 'error'))
     } else if (status === 400) {
-      console.warn('请求参数错误:', message)
+      getGlobal().then(g => g.showToast(message || '请求参数错误', 'warning'))
+    } else if (status === 404) {
+      getGlobal().then(g => g.showToast('资源不存在', 'error'))
+    } else if (status === 405) {
+      getGlobal().then(g => g.showToast('请求方法不允许', 'error'))
     } else if (status >= 500) {
-      console.error('服务器错误:', message)
+      getGlobal().then(g => g.showToast(message || '服务器错误', 'error'))
     } else if (error.code === 'ECONNABORTED') {
-      console.error('请求超时')
+      getGlobal().then(g => g.showToast('请求超时，请稍后重试', 'error'))
     } else if (!error.response) {
-      console.error('网络异常，无法连接服务器')
+      getGlobal().then(g => g.showToast('网络异常，无法连接服务器', 'error'))
     }
 
     return Promise.reject(error)

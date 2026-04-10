@@ -10,6 +10,8 @@ import com.lottery.service.impl.task.FetchTaskManager;
 import com.lottery.service.impl.task.FetchTaskManager.FetchTask;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -38,32 +40,26 @@ public class FetchServiceImpl implements FetchService {
     private final ZhcwJsonFetcher zhcwJsonFetcher;
     private final FetchTaskManager taskManager;
 
-    private ExecutorService taskExecutor;
+    @Qualifier("lotteryFetchExecutor")
+    private final ThreadPoolTaskExecutor taskExecutor;
 
     @PostConstruct
     public void init() {
-        taskExecutor = Executors.newFixedThreadPool(8, r -> {
-            Thread t = new Thread(r, "lottery-fetch-task");
-            t.setDaemon(true);
-            return t;
-        });
         taskManager.recoverUnfinishedTasks();
     }
 
     @PreDestroy
     public void destroy() {
-        if (taskExecutor != null) {
-            log.info("[关闭] 正在关闭抓取任务线程池...");
-            taskExecutor.shutdown();
-            try {
-                if (!taskExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
-                    log.warn("[关闭] 线程池超时，强制关闭");
-                    taskExecutor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                taskExecutor.shutdownNow();
-                Thread.currentThread().interrupt();
+        log.info("[关闭] 正在关闭抓取任务线程池...");
+        taskExecutor.shutdown();
+        try {
+            if (!taskExecutor.getThreadPoolExecutor().awaitTermination(30, TimeUnit.SECONDS)) {
+                log.warn("[关闭] 线程池超时，强制关闭");
+                taskExecutor.shutdown();
             }
+        } catch (InterruptedException e) {
+            taskExecutor.shutdown();
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -83,7 +79,7 @@ public class FetchServiceImpl implements FetchService {
     public Map<String, Object> startFetchAllTask(String scope, Integer count) {
         FetchScope fetchScope = resolveScope(scope, count);
         FetchTask task = taskManager.createTask("all", fetchScope.getScope(), "concurrent-by-type", "manual", LotteryType.values().length);
-        taskExecutor.submit(() -> executeAllTask(task, fetchScope));
+        taskExecutor.execute(() -> executeAllTask(task, fetchScope));
         return task.toMap();
     }
 
@@ -91,7 +87,7 @@ public class FetchServiceImpl implements FetchService {
     public Map<String, Object> startFetchTask(String lotteryType, String scope, Integer count) {
         FetchScope fetchScope = resolveScope(scope, count);
         FetchTask task = taskManager.createTask(lotteryType, fetchScope.getScope(), "single", "manual", 1);
-        taskExecutor.submit(() -> executeSingleTask(task, lotteryType, fetchScope));
+        taskExecutor.execute(() -> executeSingleTask(task, lotteryType, fetchScope));
         return task.toMap();
     }
 
@@ -118,7 +114,7 @@ public class FetchServiceImpl implements FetchService {
     public void fetchLatest() {
         FetchScope fetchScope = resolveScope("latest-1", 1);
         FetchTask task = taskManager.createTask("all", fetchScope.getScope(), "concurrent-by-type", "scheduled", LotteryType.values().length);
-        taskExecutor.submit(() -> executeAllTask(task, fetchScope));
+        taskExecutor.execute(() -> executeAllTask(task, fetchScope));
     }
 
     // ===== 任务执行 =====

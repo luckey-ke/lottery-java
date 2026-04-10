@@ -4,18 +4,18 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
  * 全局异常处理
- * <p>
- * 正常响应直接返回 Map（前端无需改动）。
- * 异常响应也返回 Map + 正确的 HTTP status code。
  */
 @Slf4j
 @RestControllerAdvice
@@ -33,6 +33,26 @@ public class GlobalExceptionHandler {
     public Map<String, Object> handleIllegalArg(IllegalArgumentException e, HttpServletRequest req) {
         log.warn("[参数错误] {} {} → {}", req.getMethod(), req.getRequestURI(), e.getMessage());
         return errorMap(400, e.getMessage());
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, Object> handleMissingParam(MissingServletRequestParameterException e, HttpServletRequest req) {
+        log.warn("[缺少参数] {} {} → {}", req.getMethod(), req.getRequestURI(), e.getMessage());
+        return errorMap(400, "缺少必要参数: " + e.getParameterName());
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
+    public Map<String, Object> handleMethodNotSupported(HttpRequestMethodNotSupportedException e, HttpServletRequest req) {
+        log.warn("[方法不允许] {} {} → {}", req.getMethod(), req.getRequestURI(), e.getMessage());
+        return errorMap(405, "不支持的请求方法: " + req.getMethod());
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, Object> handleNotFound(NoResourceFoundException e, HttpServletRequest req) {
+        return errorMap(404, "资源不存在");
     }
 
     @ExceptionHandler(Exception.class)

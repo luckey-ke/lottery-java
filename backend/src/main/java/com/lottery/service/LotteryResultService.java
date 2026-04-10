@@ -45,19 +45,11 @@ public class LotteryResultService {
         return exists ? SaveOutcome.UPDATED : SaveOutcome.INSERTED;
     }
 
-    public List<LotteryResult> query(String type, int limit, int offset) {
-        return queryReal(type, limit, offset);
-    }
-
     public List<LotteryResult> queryReal(String type, int limit, int offset) {
         if (type == null || type.isBlank()) {
             return mapper.findAll(limit, offset);
         }
         return mapper.findByType(type, limit, offset);
-    }
-
-    public int count(String type) {
-        return countReal(type);
     }
 
     public int countReal(String type) {
@@ -67,10 +59,6 @@ public class LotteryResultService {
         return mapper.countByType(type);
     }
 
-    public String latestDrawNum(String type) {
-        return latestRealDrawNum(type);
-    }
-
     public String latestRealDrawNum(String type) {
         return mapper.findLatestDrawNum(type);
     }
@@ -78,10 +66,6 @@ public class LotteryResultService {
     public LotteryResult latestRealResult(String type) {
         List<LotteryResult> list = queryReal(type, 1, 0);
         return list.isEmpty() ? null : list.get(0);
-    }
-
-    public List<LotteryResult> allNumbers(String type) {
-        return allRealNumbers(type);
     }
 
     public List<LotteryResult> allRealNumbers(String type) {

@@ -27,7 +27,7 @@ public class AnalysisService {
     // ============================================================
 
     public Map<String, Object> analyze(String type) {
-        List<LotteryResult> rows = resultService.allNumbers(type);
+        List<LotteryResult> rows = resultService.allRealNumbers(type);
         if (rows.isEmpty()) return Map.of("error", "[" + type + "] 暂无数据");
 
         return switch (type) {
@@ -49,7 +49,7 @@ public class AnalysisService {
     }
 
     public Map<String, Object> trend(String type, int recentN) {
-        List<LotteryResult> all = resultService.allNumbers(type);
+        List<LotteryResult> all = resultService.allRealNumbers(type);
         if (all.isEmpty()) return Map.of("error", "暂无数据");
 
         List<LotteryResult> recent = all.size() > recentN

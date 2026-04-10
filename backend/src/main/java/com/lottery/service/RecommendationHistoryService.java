@@ -111,7 +111,7 @@ public class RecommendationHistoryService {
                 .collect(Collectors.groupingBy(RecommendationHistory::getRecommendDate));
 
         // 获取所有结果用于匹配
-        List<LotteryResult> allResults = resultService.allNumbers(type);
+        List<LotteryResult> allResults = resultService.allRealNumbers(type);
         Map<String, LotteryResult> resultMap = new LinkedHashMap<>();
         for (LotteryResult r : allResults) {
             resultMap.put(r.getDrawDate(), r);
