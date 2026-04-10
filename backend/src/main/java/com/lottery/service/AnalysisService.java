@@ -1,5 +1,9 @@
 package com.lottery.service;
 
+import com.lottery.common.LotteryNumberUtils;
+import com.lottery.common.LotteryNumberUtils.ParsedDlt;
+import com.lottery.common.LotteryNumberUtils.ParsedSsq;
+import com.lottery.common.StatisticsUtils;
 import com.lottery.entity.LotteryResult;
 import com.lottery.entity.LotteryType;
 import lombok.RequiredArgsConstructor;
@@ -85,7 +89,7 @@ public class AnalysisService {
 
         ParsedSsq prev = null;
         for (int idx = 0; idx < rows.size(); idx++) {
-            ParsedSsq p = parseSsq(rows.get(idx).getNumbers());
+            ParsedSsq p = LotteryNumberUtils.parseSsq(rows.get(idx).getNumbers());
             for (int r : p.reds) redFreq[r]++;
             for (int b : p.blue) blueFreq[b]++;
 
@@ -98,11 +102,11 @@ public class AnalysisService {
             spans.add(span);
             spanDist.merge(span, 1, Integer::sum);
 
-            int ac = calcAC(p.reds);
+            int ac = LotteryNumberUtils.calcAC(p.reds);
             acValues.add(ac);
             acDist.merge(ac, 1, Integer::sum);
 
-            int consec = countConsecutive(p.reds);
+            int consec = LotteryNumberUtils.countConsecutive(p.reds);
             consecutiveCounts.add(consec);
             consecutiveDist.merge(consec, 1, Integer::sum);
 
@@ -219,7 +223,7 @@ public class AnalysisService {
 
         ParsedDlt prev = null;
         for (LotteryResult row : rows) {
-            ParsedDlt p = parseDlt(row.getNumbers());
+            ParsedDlt p = LotteryNumberUtils.parseDlt(row.getNumbers());
             for (int f : p.front) frontFreq[f]++;
             for (int b : p.back) backFreq[b]++;
 
@@ -232,11 +236,11 @@ public class AnalysisService {
             frontSpans.add(span);
             spanDist.merge(span, 1, Integer::sum);
 
-            int ac = calcAC(p.front);
+            int ac = LotteryNumberUtils.calcAC(p.front);
             frontACs.add(ac);
             acDist.merge(ac, 1, Integer::sum);
 
-            int consec = countConsecutive(p.front);
+            int consec = LotteryNumberUtils.countConsecutive(p.front);
             frontConsecs.add(consec);
             consecutiveDist.merge(consec, 1, Integer::sum);
 
@@ -327,7 +331,7 @@ public class AnalysisService {
 
         int[] prevNums = null;
         for (LotteryResult row : rows) {
-            int[] nums = parsePositional(row.getNumbers(), positions);
+            int[] nums = LotteryNumberUtils.parsePositional(row.getNumbers(), positions);
             for (int i = 0; i < positions; i++) posFreq[i][nums[i]]++;
             String combo = Arrays.toString(nums);
             comboFreq.merge(combo, 1, Integer::sum);
@@ -351,7 +355,7 @@ public class AnalysisService {
             long mod2 = Arrays.stream(nums).filter(n -> n % 3 == 2).count();
             mod012.merge(mod0 + ":" + mod1 + ":" + mod2, 1, Integer::sum);
 
-            int consec = countConsecutive(nums);
+            int consec = LotteryNumberUtils.countConsecutive(nums);
             consecutiveDist.merge(consec, 1, Integer::sum);
 
             // 龙虎和 (仅两位比较首尾)
@@ -442,7 +446,7 @@ public class AnalysisService {
 
         int[] prevNums = null;
         for (LotteryResult row : rows) {
-            int[] nums = parseGeneric(row.getNumbers(), 7);
+            int[] nums = LotteryNumberUtils.parseGeneric(row.getNumbers(), 7);
             Arrays.sort(nums);
             for (int n : nums) if (n >= 1 && n <= 30) freq[n]++;
 
@@ -455,11 +459,11 @@ public class AnalysisService {
             spans.add(span);
             spanDist.merge(span, 1, Integer::sum);
 
-            int ac = calcAC(nums);
+            int ac = LotteryNumberUtils.calcAC(nums);
             acValues.add(ac);
             acDist.merge(ac, 1, Integer::sum);
 
-            int consec = countConsecutive(nums);
+            int consec = LotteryNumberUtils.countConsecutive(nums);
             consecutiveCounts.add(consec);
             consecutiveDist.merge(consec, 1, Integer::sum);
 
@@ -526,15 +530,15 @@ public class AnalysisService {
         List<Map<String, Object>> trend = new ArrayList<>();
         ParsedSsq prev = null;
         for (LotteryResult row : rows) {
-            ParsedSsq p = parseSsq(row.getNumbers());
+            ParsedSsq p = LotteryNumberUtils.parseSsq(row.getNumbers());
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("drawNum", row.getDrawNum());
             m.put("drawDate", row.getDrawDate());
             m.put("numbers", row.getNumbers());
             m.put("sum", Arrays.stream(p.reds).sum());
             m.put("span", p.reds[p.reds.length - 1] - p.reds[0]);
-            m.put("ac", calcAC(p.reds));
-            m.put("consecutive", countConsecutive(p.reds));
+            m.put("ac", LotteryNumberUtils.calcAC(p.reds));
+            m.put("consecutive", LotteryNumberUtils.countConsecutive(p.reds));
             m.put("oddCount", (int) Arrays.stream(p.reds).filter(r -> r % 2 == 1).count());
             m.put("bigCount", (int) Arrays.stream(p.reds).filter(r -> r >= 17).count());
             m.put("primeCount", (int) Arrays.stream(p.reds).filter(PRIMES::contains).count());
@@ -556,14 +560,14 @@ public class AnalysisService {
         List<Map<String, Object>> trend = new ArrayList<>();
         ParsedDlt prev = null;
         for (LotteryResult row : rows) {
-            ParsedDlt p = parseDlt(row.getNumbers());
+            ParsedDlt p = LotteryNumberUtils.parseDlt(row.getNumbers());
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("drawNum", row.getDrawNum());
             m.put("drawDate", row.getDrawDate());
             m.put("numbers", row.getNumbers());
             m.put("frontSum", Arrays.stream(p.front).sum());
             m.put("frontSpan", p.front[p.front.length - 1] - p.front[0]);
-            m.put("frontAC", calcAC(p.front));
+            m.put("frontAC", LotteryNumberUtils.calcAC(p.front));
             m.put("frontOdd", (int) Arrays.stream(p.front).filter(f -> f % 2 == 1).count());
             m.put("frontPrime", (int) Arrays.stream(p.front).filter(PRIMES::contains).count());
             m.put("backSum", Arrays.stream(p.back).sum());
@@ -581,7 +585,7 @@ public class AnalysisService {
         List<Map<String, Object>> trend = new ArrayList<>();
         int[] prevNums = null;
         for (LotteryResult row : rows) {
-            int[] nums = parsePositional(row.getNumbers(), positions);
+            int[] nums = LotteryNumberUtils.parsePositional(row.getNumbers(), positions);
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("drawNum", row.getDrawNum());
             m.put("drawDate", row.getDrawDate());
@@ -605,7 +609,7 @@ public class AnalysisService {
         List<Map<String, Object>> trend = new ArrayList<>();
         int[] prevNums = null;
         for (LotteryResult row : rows) {
-            int[] nums = parseGeneric(row.getNumbers(), 7);
+            int[] nums = LotteryNumberUtils.parseGeneric(row.getNumbers(), 7);
             Arrays.sort(nums);
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("drawNum", row.getDrawNum());
@@ -613,7 +617,7 @@ public class AnalysisService {
             m.put("numbers", row.getNumbers());
             m.put("sum", Arrays.stream(nums).sum());
             m.put("span", nums[nums.length - 1] - nums[0]);
-            m.put("ac", calcAC(nums));
+            m.put("ac", LotteryNumberUtils.calcAC(nums));
             m.put("oddCount", (int) Arrays.stream(nums).filter(n -> n % 2 == 1).count());
             m.put("bigCount", (int) Arrays.stream(nums).filter(n -> n >= 16).count());
             m.put("primeCount", (int) Arrays.stream(nums).filter(n -> n <= 30 && PRIMES.contains(n)).count());
@@ -628,93 +632,24 @@ public class AnalysisService {
     }
 
     // ============================================================
-    //  号码解析
+    //  号码解析（委托 LotteryNumberUtils）
     // ============================================================
 
-    private record ParsedSsq(int[] reds, int[] blue) {}
-
-    private ParsedSsq parseSsq(String numbers) {
-        String[] parts = numbers.replace(" ", "").split("\\+");
-        int[] reds = Arrays.stream(parts[0].split(","))
-                .filter(s -> !s.isBlank()).mapToInt(Integer::parseInt).toArray();
-        int[] blue = parts.length > 1
-                ? Arrays.stream(parts[1].split(",")).filter(s -> !s.isBlank()).mapToInt(Integer::parseInt).toArray()
-                : new int[0];
-        return new ParsedSsq(reds, blue);
-    }
-
-    private record ParsedDlt(int[] front, int[] back) {}
-
-    private ParsedDlt parseDlt(String numbers) {
-        String[] parts = numbers.replace(" ", "").split("\\+");
-        int[] front = Arrays.stream(parts[0].split(","))
-                .filter(s -> !s.isBlank()).mapToInt(Integer::parseInt).toArray();
-        int[] back = parts.length > 1
-                ? Arrays.stream(parts[1].split(",")).filter(s -> !s.isBlank()).mapToInt(Integer::parseInt).toArray()
-                : new int[0];
-        return new ParsedDlt(front, back);
-    }
-
-    private int[] parsePositional(String numbers, int count) {
-        String cleaned = numbers.replace(",", "").replace(" ", "");
-        int[] result = new int[count];
-        for (int i = 0; i < count && i < cleaned.length(); i++) {
-            result[i] = Character.getNumericValue(cleaned.charAt(i));
-        }
-        return result;
-    }
-
-    private int[] parseGeneric(String numbers, int count) {
-        return Arrays.stream(numbers.replace(",", " ").trim().split("\\s+"))
-                .filter(s -> !s.isBlank() && s.matches("\\d+"))
-                .mapToInt(Integer::parseInt)
-                .limit(count)
-                .toArray();
-    }
-
     // ============================================================
-    //  遗漏值
+    //  统计工具 (委托 StatisticsUtils)
     // ============================================================
 
     private Map<String, Integer> calcMissing(List<LotteryResult> rows, boolean isRed) {
         int max = isRed ? 33 : 16;
-        int[] miss = new int[max + 1];
-        for (LotteryResult row : rows) {
-            ParsedSsq p = parseSsq(row.getNumbers());
-            int[] appeared = isRed ? p.reds : p.blue;
-            Set<Integer> set = Arrays.stream(appeared).boxed().collect(Collectors.toSet());
-            for (int n = 1; n <= max; n++) {
-                if (set.contains(n)) miss[n] = 0;
-                else miss[n]++;
-            }
+        int[] miss;
+        if (isRed) {
+            miss = StatisticsUtils.calcSsqRedMissing(rows);
+        } else {
+            miss = StatisticsUtils.calcSsqBlueMissing(rows);
         }
         Map<String, Integer> map = new LinkedHashMap<>();
         for (int i = 1; i <= max; i++) map.put(String.format("%02d", i), miss[i]);
         return map;
-    }
-
-    // ============================================================
-    //  统计计算
-    // ============================================================
-
-    /** AC值 = 不同差值的个数 - (n-1)，衡量号码组合的复杂度 */
-    private int calcAC(int[] nums) {
-        Set<Integer> diffs = new HashSet<>();
-        for (int i = 0; i < nums.length; i++) {
-            for (int j = i + 1; j < nums.length; j++) {
-                diffs.add(Math.abs(nums[i] - nums[j]));
-            }
-        }
-        return diffs.size() - (nums.length - 1);
-    }
-
-    /** 连号个数: 有多少对相邻号码 */
-    private int countConsecutive(int[] sortedNums) {
-        int count = 0;
-        for (int i = 1; i < sortedNums.length; i++) {
-            if (sortedNums[i] - sortedNums[i - 1] == 1) count++;
-        }
-        return count;
     }
 
     private Map<String, Object> buildStatsMap(List<Integer> values) {
@@ -742,27 +677,11 @@ public class AnalysisService {
         return result;
     }
 
-    // ============================================================
-    //  工具方法
-    // ============================================================
-
     private List<String> topN(int[] freq, int min, int max, int n, boolean hot) {
-        List<int[]> items = new ArrayList<>();
-        for (int i = min; i <= max; i++) items.add(new int[]{i, freq[i]});
-        items.sort(hot
-                ? (a, b) -> Integer.compare(b[1], a[1])
-                : (a, b) -> Integer.compare(a[1], b[1]));
-        return items.subList(0, Math.min(n, items.size())).stream()
-                .map(a -> String.format("%02d", a[0])).toList();
+        return StatisticsUtils.topN(freq, min, max, n, hot);
     }
 
     private List<String> topN10(int[] freq, int n, boolean hot) {
-        List<int[]> items = new ArrayList<>();
-        for (int i = 0; i < 10; i++) items.add(new int[]{i, freq[i]});
-        items.sort(hot
-                ? (a, b) -> Integer.compare(b[1], a[1])
-                : (a, b) -> Integer.compare(a[1], b[1]));
-        return items.subList(0, Math.min(n, items.size())).stream()
-                .map(a -> String.valueOf(a[0])).toList();
+        return StatisticsUtils.topN10(freq, n, hot);
     }
 }

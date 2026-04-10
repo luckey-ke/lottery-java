@@ -20,6 +20,7 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 数据采集服务 — 职责：调度各 fetcher，管理异步任务
@@ -54,6 +55,15 @@ public class FetchServiceImpl implements FetchService {
         if (taskExecutor != null) {
             log.info("[关闭] 正在关闭抓取任务线程池...");
             taskExecutor.shutdown();
+            try {
+                if (!taskExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                    log.warn("[关闭] 线程池超时，强制关闭");
+                    taskExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                taskExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
@@ -182,6 +192,14 @@ public class FetchServiceImpl implements FetchService {
             }
         } finally {
             executor.shutdown();
+            try {
+                if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                executor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
         }
 
         summary.put("status", hasError ? "partial_failed" : "success");

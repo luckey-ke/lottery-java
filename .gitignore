@@ -7,3 +7,7 @@
 Thumbs.db
 data/*.db
 .claude/
+frontend/dist/
+frontend/node_modules/
+*.db
+data/

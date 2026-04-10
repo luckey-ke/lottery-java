@@ -52,14 +52,14 @@ public class AuthInterceptor implements HandlerInterceptor {
     }
 
     private boolean isPublicEndpoint(String path) {
-        return path.endsWith("/status")
-                || path.endsWith("/results")
-                || path.endsWith("/latest")
-                || path.contains("/analyze")
-                || path.contains("/trend")
-                || path.contains("/recommend/history")
-                || path.contains("/recommend/stats")
-                || path.contains("/fetch/history")
-                || path.contains("/fetch/tasks/");
+        return switch (path) {
+            case "/api/lottery/status", "/api/lottery/results", "/api/lottery/latest" -> true;
+            default -> path.startsWith("/api/lottery/analyze")
+                    || path.startsWith("/api/lottery/trend")
+                    || path.startsWith("/api/lottery/recommend/history")
+                    || path.startsWith("/api/lottery/recommend/stats")
+                    || path.startsWith("/api/lottery/fetch/history")
+                    || path.startsWith("/api/lottery/fetch/tasks/");
+        };
     }
 }

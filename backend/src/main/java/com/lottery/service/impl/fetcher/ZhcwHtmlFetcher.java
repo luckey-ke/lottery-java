@@ -1,6 +1,7 @@
 package com.lottery.service.impl.fetcher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lottery.common.FetcherUtils;
 import com.lottery.entity.LotteryResult;
 import com.lottery.service.LotteryResultService;
 import lombok.RequiredArgsConstructor;
@@ -318,43 +319,41 @@ public class ZhcwHtmlFetcher {
         batch.clear();
     }
 
-    // ===== 通用字符串工具 =====
+    // ===== 工具方法 (委托 FetcherUtils) =====
+
+    private void flushBatch(List<LotteryResult> batch, AtomicInteger inserted, AtomicInteger updated) {
+        FetcherUtils.flushBatch(batch, resultService, inserted, updated);
+    }
 
     private String joinWithComma(List<String> nums) {
-        List<String> padded = new ArrayList<>();
-        for (String num : nums) padded.add(pad2(num));
-        return String.join(",", padded);
+        return FetcherUtils.joinWithComma(nums);
     }
 
     private String pad2(String num) {
-        return String.format("%02d", Integer.parseInt(num.trim()));
+        return FetcherUtils.pad2(num);
     }
 
     private String firstNonBlank(String... values) {
-        for (String v : values) { if (v != null && !v.isBlank()) return v.trim(); }
-        return null;
+        return FetcherUtils.firstNonBlank(values);
     }
 
     private String prefixedValue(String prefix, String value) {
-        return (value == null || value.isBlank()) ? null : prefix + value.trim();
+        return FetcherUtils.prefixedValue(prefix, value);
     }
 
     private String joinNonBlank(String delimiter, String... values) {
-        List<String> parts = new ArrayList<>();
-        for (String v : values) { if (v != null && !v.isBlank()) parts.add(v.trim()); }
-        return parts.isEmpty() ? null : String.join(delimiter, parts);
+        return FetcherUtils.joinNonBlank(delimiter, values);
     }
 
     private void putIfPresent(Map<String, Object> target, String key, Object value) {
-        if (value == null) return;
-        if (value instanceof String s) { if (!s.isBlank()) target.put(key, s); return; }
-        if (value instanceof Map<?, ?> m && m.isEmpty()) return;
-        if (value instanceof List<?> l && l.isEmpty()) return;
-        target.put(key, value);
+        FetcherUtils.putIfPresent(target, key, value);
     }
 
+    /** 安全休眠，中断时抛出 IllegalStateException 终止抓取流程 */
     private void sleepQuietly(long millis) {
-        try { Thread.sleep(millis); } catch (InterruptedException e) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("等待中断", e);
         }

@@ -2,6 +2,7 @@ package com.lottery.service.impl.fetcher;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lottery.common.FetcherUtils;
 import com.lottery.entity.LotteryResult;
 import com.lottery.service.LotteryResultService;
 import lombok.RequiredArgsConstructor;
@@ -444,16 +445,10 @@ public class ZhcwJsonFetcher {
         return response.body();
     }
 
-    // ===== 工具方法 =====
+    // ===== 工具方法 (委托 FetcherUtils) =====
 
     private void flushBatch(List<LotteryResult> batch, AtomicInteger inserted, AtomicInteger updated) {
-        if (batch.isEmpty()) return;
-        for (LotteryResult result : batch) {
-            LotteryResultService.SaveOutcome outcome = resultService.saveReal(result);
-            if (outcome == LotteryResultService.SaveOutcome.INSERTED) inserted.incrementAndGet();
-            else if (outcome == LotteryResultService.SaveOutcome.UPDATED) updated.incrementAndGet();
-        }
-        batch.clear();
+        FetcherUtils.flushBatch(batch, resultService, inserted, updated);
     }
 
     private String textValue(JsonNode node, String fieldName) {
@@ -464,47 +459,38 @@ public class ZhcwJsonFetcher {
     }
 
     private String normalizeDate(String raw) {
-        if (raw == null || raw.isBlank()) return "";
-        String t = raw.trim();
-        return t.length() >= 10 ? t.substring(0, 10) : t;
+        return FetcherUtils.normalizeDate(raw);
     }
 
     private String pad2(String num) {
-        return String.format("%02d", Integer.parseInt(num.trim()));
+        return FetcherUtils.pad2(num);
     }
 
     private String firstNonBlank(String... values) {
-        for (String v : values) { if (v != null && !v.isBlank()) return v.trim(); }
-        return null;
+        return FetcherUtils.firstNonBlank(values);
     }
 
-    private String blankToNull(String v) { return v == null || v.isBlank() ? null : v.trim(); }
+    private String blankToNull(String v) {
+        return FetcherUtils.blankToNull(v);
+    }
 
     private String prefixedValue(String prefix, String value) {
-        String n = blankToNull(value);
-        return n == null ? null : prefix + n;
+        return FetcherUtils.prefixedValue(prefix, value);
     }
 
     private String suffixedValue(String value, String suffix) {
-        String n = blankToNull(value);
-        return n == null ? null : n + suffix;
+        return FetcherUtils.suffixedValue(value, suffix);
     }
 
     private String joinNonBlank(String delimiter, String... values) {
-        List<String> parts = new ArrayList<>();
-        for (String v : values) { if (v != null && !v.isBlank()) parts.add(v.trim()); }
-        return parts.isEmpty() ? null : String.join(delimiter, parts);
+        return FetcherUtils.joinNonBlank(delimiter, values);
     }
 
     private void putIfPresent(Map<String, Object> target, String key, Object value) {
-        if (value == null) return;
-        if (value instanceof String s) { if (!s.isBlank()) target.put(key, s); return; }
-        target.put(key, value);
+        FetcherUtils.putIfPresent(target, key, value);
     }
 
     private void sleepQuietly(long millis) {
-        try { Thread.sleep(millis); } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        FetcherUtils.sleepQuietly(millis);
     }
 }

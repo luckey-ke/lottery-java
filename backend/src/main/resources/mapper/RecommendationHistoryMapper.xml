@@ -3,7 +3,8 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.lottery.mapper.RecommendationHistoryMapper">
 
-    <insert id="upsert">
+    <!-- upsert (SQLite) -->
+    <insert id="upsert" databaseId="sqlite">
         INSERT INTO recommendation_history(lottery_type, recommend_date, strategy_name, strategy_index,
             recommended_numbers, actual_numbers, hit_main, hit_extra, created_at, updated_at)
         VALUES(#{lotteryType}, #{recommendDate}, #{strategyName}, #{strategyIndex},
@@ -15,6 +16,21 @@
             hit_main = excluded.hit_main,
             hit_extra = excluded.hit_extra,
             updated_at = excluded.updated_at
+    </insert>
+
+    <!-- upsert (MySQL) -->
+    <insert id="upsert" databaseId="mysql">
+        INSERT INTO recommendation_history(lottery_type, recommend_date, strategy_name, strategy_index,
+            recommended_numbers, actual_numbers, hit_main, hit_extra, created_at, updated_at)
+        VALUES(#{lotteryType}, #{recommendDate}, #{strategyName}, #{strategyIndex},
+            #{recommendedNumbers}, #{actualNumbers}, #{hitMain}, #{hitExtra}, #{createdAt}, #{updatedAt})
+        ON DUPLICATE KEY UPDATE
+            strategy_name = VALUES(strategy_name),
+            recommended_numbers = VALUES(recommended_numbers),
+            actual_numbers = VALUES(actual_numbers),
+            hit_main = VALUES(hit_main),
+            hit_extra = VALUES(hit_extra),
+            updated_at = VALUES(updated_at)
     </insert>
 
 </mapper>

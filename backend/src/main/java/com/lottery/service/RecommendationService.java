@@ -1,5 +1,7 @@
 package com.lottery.service;
 
+import com.lottery.common.LotteryNumberUtils;
+import com.lottery.common.StatisticsUtils;
 import com.lottery.entity.LotteryResult;
 import com.lottery.entity.LotteryType;
 import lombok.RequiredArgsConstructor;
@@ -260,7 +262,7 @@ public class RecommendationService {
         // 各位频率
         int[][] posFreq = new int[positions][10];
         for (LotteryResult row : rows) {
-            int[] nums = parsePositional(row.getNumbers(), positions);
+            int[] nums = LotteryNumberUtils.parsePositional(row.getNumbers(), positions);
             for (int i = 0; i < positions; i++) posFreq[i][nums[i]]++;
         }
 
@@ -268,7 +270,7 @@ public class RecommendationService {
         List<LotteryResult> recent30 = tail(rows, 30);
         int[][] recentPosFreq = new int[positions][10];
         for (LotteryResult row : recent30) {
-            int[] nums = parsePositional(row.getNumbers(), positions);
+            int[] nums = LotteryNumberUtils.parsePositional(row.getNumbers(), positions);
             for (int i = 0; i < positions; i++) recentPosFreq[i][nums[i]]++;
         }
 
@@ -461,150 +463,50 @@ public class RecommendationService {
     }
 
     private int calcAC(List<Integer> nums) {
-        Set<Integer> diffs = new HashSet<>();
-        for (int i = 0; i < nums.size(); i++) {
-            for (int j = i + 1; j < nums.size(); j++) {
-                diffs.add(Math.abs(nums.get(i) - nums.get(j)));
-            }
-        }
-        return diffs.size() - (nums.size() - 1);
+        return LotteryNumberUtils.calcAC(nums.stream().mapToInt(Integer::intValue).toArray());
     }
 
     // ============================================================
-    //  频率计算
+    //  频率/遗漏/统计 (委托 StatisticsUtils)
     // ============================================================
 
     private int[] calcFreq(List<LotteryResult> rows, boolean isRed, int max) {
-        int[] freq = new int[max + 1];
-        for (LotteryResult row : rows) {
-            for (int n : parseSsqReds(row.getNumbers())) {
-                if (n >= 1 && n <= max) freq[n]++;
-            }
-        }
-        return freq;
+        return StatisticsUtils.calcSsqRedFreq(rows, max);
     }
 
     private int[] calcFreqSsqBlue(List<LotteryResult> rows) {
-        int[] freq = new int[17];
-        for (LotteryResult row : rows) {
-            int[] blue = parseSsqBlue(row.getNumbers());
-            for (int b : blue) if (b >= 1 && b <= 16) freq[b]++;
-        }
-        return freq;
+        return StatisticsUtils.calcSsqBlueFreq(rows);
     }
 
     private int[] calcFreqDltFront(List<LotteryResult> rows) {
-        int[] freq = new int[36];
-        for (LotteryResult row : rows) {
-            int[] front = parseDltFront(row.getNumbers());
-            for (int f : front) if (f >= 1 && f <= 35) freq[f]++;
-        }
-        return freq;
+        return StatisticsUtils.calcDltFrontFreq(rows);
     }
 
     private int[] calcFreqDltBack(List<LotteryResult> rows) {
-        int[] freq = new int[13];
-        for (LotteryResult row : rows) {
-            int[] back = parseDltBack(row.getNumbers());
-            for (int b : back) if (b >= 1 && b <= 12) freq[b]++;
-        }
-        return freq;
+        return StatisticsUtils.calcDltBackFreq(rows);
     }
 
     private int[] calcFreqQlc(List<LotteryResult> rows) {
-        int[] freq = new int[31];
-        for (LotteryResult row : rows) {
-            int[] nums = parseGeneric(row.getNumbers(), 7);
-            for (int n : nums) if (n >= 1 && n <= 30) freq[n]++;
-        }
-        return freq;
+        return StatisticsUtils.calcQlcFreq(rows);
     }
 
-    // ============================================================
-    //  遗漏值计算
-    // ============================================================
-
     private int[] calcMissing(List<LotteryResult> rows, boolean isRed, int max) {
-        int[] miss = new int[max + 1];
-        for (LotteryResult row : rows) {
-            Set<Integer> appeared = new HashSet<>();
-            for (int n : parseSsqReds(row.getNumbers())) appeared.add(n);
-            for (int n = 1; n <= max; n++) {
-                if (appeared.contains(n)) miss[n] = 0;
-                else miss[n]++;
-            }
-        }
-        return miss;
+        return StatisticsUtils.calcMissing(rows, isRed, max);
     }
 
     private int[] calcMissingSsqBlue(List<LotteryResult> rows) {
-        int[] miss = new int[17];
-        for (LotteryResult row : rows) {
-            Set<Integer> appeared = Arrays.stream(parseSsqBlue(row.getNumbers())).boxed().collect(Collectors.toSet());
-            for (int n = 1; n <= 16; n++) {
-                if (appeared.contains(n)) miss[n] = 0;
-                else miss[n]++;
-            }
-        }
-        return miss;
+        return StatisticsUtils.calcSsqBlueMissing(rows);
     }
 
     private int[] calcMissingQlc(List<LotteryResult> rows) {
-        int[] miss = new int[31];
-        for (LotteryResult row : rows) {
-            Set<Integer> appeared = Arrays.stream(parseGeneric(row.getNumbers(), 7)).boxed().collect(Collectors.toSet());
-            for (int n = 1; n <= 30; n++) {
-                if (appeared.contains(n)) miss[n] = 0;
-                else miss[n]++;
-            }
-        }
-        return miss;
+        return StatisticsUtils.calcQlcMissing(rows);
     }
 
-    // ============================================================
-    //  号码解析
-    // ============================================================
-
-    private int[] parseSsqReds(String numbers) {
-        String[] parts = numbers.replace(" ", "").split("\\+");
-        return Arrays.stream(parts[0].split(","))
-                .filter(s -> !s.isBlank()).mapToInt(Integer::parseInt).toArray();
+    private List<Integer> topNIndices(int[] freq, int min, int max, int n, boolean hot) {
+        return StatisticsUtils.topNIndices(freq, min, max, n, hot);
     }
 
-    private int[] parseSsqBlue(String numbers) {
-        String[] parts = numbers.replace(" ", "").split("\\+");
-        return parts.length > 1
-                ? Arrays.stream(parts[1].split(",")).filter(s -> !s.isBlank()).mapToInt(Integer::parseInt).toArray()
-                : new int[0];
-    }
-
-    private int[] parseDltFront(String numbers) {
-        String[] parts = numbers.replace(" ", "").split("\\+");
-        return Arrays.stream(parts[0].split(","))
-                .filter(s -> !s.isBlank()).mapToInt(Integer::parseInt).toArray();
-    }
-
-    private int[] parseDltBack(String numbers) {
-        String[] parts = numbers.replace(" ", "").split("\\+");
-        return parts.length > 1
-                ? Arrays.stream(parts[1].split(",")).filter(s -> !s.isBlank()).mapToInt(Integer::parseInt).toArray()
-                : new int[0];
-    }
-
-    private int[] parsePositional(String numbers, int count) {
-        String cleaned = numbers.replace(",", "").replace(" ", "");
-        int[] result = new int[count];
-        for (int i = 0; i < count && i < cleaned.length(); i++) {
-            result[i] = Character.getNumericValue(cleaned.charAt(i));
-        }
-        return result;
-    }
-
-    private int[] parseGeneric(String numbers, int count) {
-        return Arrays.stream(numbers.replace(",", " ").trim().split("\\s+"))
-                .filter(s -> !s.isBlank() && s.matches("\\d+"))
-                .mapToInt(Integer::parseInt)
-                .limit(count)
-                .toArray();
+    private int calcAC(List<Integer> nums) {
+        return StatisticsUtils.calcAC(nums);
     }
 }

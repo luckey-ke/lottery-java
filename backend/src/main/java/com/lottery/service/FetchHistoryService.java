@@ -49,22 +49,7 @@ public class FetchHistoryService {
      * 查询所有未完成的任务（status = pending 或 running）
      */
     public List<Map<String, Object>> findUnfinishedTasks() {
-        List<FetchHistoryTask> pending = mapper.listTasks("pending", null, null, 100, 0);
-        List<FetchHistoryTask> running = mapper.listTasks("running", null, null, 100, 0);
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (FetchHistoryTask task : pending) {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("taskId", task.getTaskId());
-            map.put("status", task.getStatus());
-            result.add(map);
-        }
-        for (FetchHistoryTask task : running) {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("taskId", task.getTaskId());
-            map.put("status", task.getStatus());
-            result.add(map);
-        }
-        return result;
+        return mapper.findUnfinishedTaskIds();
     }
 
     /**

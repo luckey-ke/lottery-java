@@ -4,7 +4,7 @@
 <mapper namespace="com.lottery.mapper.LotteryResultMapper">
 
     <!-- UPSERT（SQLite 用 ON CONFLICT，MySQL 需改为 INSERT ... ON DUPLICATE KEY UPDATE） -->
-    <insert id="upsertReal">
+    <insert id="upsertReal" databaseId="sqlite">
         INSERT INTO lottery_result(lottery_type, draw_num, draw_date, numbers, extra_info, fetched_at, created_at, created_by, updated_at, updated_by)
         VALUES(#{lotteryType}, #{drawNum}, #{drawDate}, #{numbers}, #{extraInfo}, #{fetchedAt}, #{createdAt}, #{createdBy}, #{updatedAt}, #{updatedBy})
         ON CONFLICT(lottery_type, draw_num) DO UPDATE SET
@@ -14,6 +14,18 @@
             fetched_at = excluded.fetched_at,
             updated_at = excluded.updated_at,
             updated_by = excluded.updated_by
+    </insert>
+
+    <insert id="upsertReal" databaseId="mysql">
+        INSERT INTO lottery_result(lottery_type, draw_num, draw_date, numbers, extra_info, fetched_at, created_at, created_by, updated_at, updated_by)
+        VALUES(#{lotteryType}, #{drawNum}, #{drawDate}, #{numbers}, #{extraInfo}, #{fetchedAt}, #{createdAt}, #{createdBy}, #{updatedAt}, #{updatedBy})
+        ON DUPLICATE KEY UPDATE
+            draw_date = VALUES(draw_date),
+            numbers = VALUES(numbers),
+            extra_info = VALUES(extra_info),
+            fetched_at = VALUES(fetched_at),
+            updated_at = VALUES(updated_at),
+            updated_by = VALUES(updated_by)
     </insert>
 
     <!-- 检查是否存在 -->
@@ -99,9 +111,19 @@
         DELETE FROM lottery_result WHERE lottery_type = #{type}
     </delete>
 
-    <!-- 批量插入（用于批量导入，使用 INSERT OR IGNORE 避免冲突） -->
-    <insert id="batchInsert">
+    <!-- 批量插入（SQLite 用 INSERT OR IGNORE） -->
+    <insert id="batchInsert" databaseId="sqlite">
         INSERT OR IGNORE INTO lottery_result(lottery_type, draw_num, draw_date, numbers, extra_info, fetched_at, created_at, created_by, updated_at, updated_by)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.lotteryType}, #{item.drawNum}, #{item.drawDate}, #{item.numbers}, #{item.extraInfo},
+             #{item.fetchedAt}, #{item.createdAt}, #{item.createdBy}, #{item.updatedAt}, #{item.updatedBy})
+        </foreach>
+    </insert>
+
+    <!-- 批量插入（MySQL 用 INSERT IGNORE） -->
+    <insert id="batchInsert" databaseId="mysql">
+        INSERT IGNORE INTO lottery_result(lottery_type, draw_num, draw_date, numbers, extra_info, fetched_at, created_at, created_by, updated_at, updated_by)
         VALUES
         <foreach collection="list" item="item" separator=",">
             (#{item.lotteryType}, #{item.drawNum}, #{item.drawDate}, #{item.numbers}, #{item.extraInfo},

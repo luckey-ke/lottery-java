@@ -36,6 +36,9 @@ public class LotteryController {
             @RequestParam(required = false) String type,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(defaultValue = "0") int offset) {
+        if (type != null) {
+            validateType(type);
+        }
         return Map.of(
                 "data", resultService.queryReal(type, limit, offset),
                 "total", resultService.countReal(type)

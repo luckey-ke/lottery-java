@@ -26,7 +26,8 @@ spring:
 
   sql:
     init:
-      mode: always
+      # SchemaMigrationRunner 已处理建表，不需要 Spring 自动执行 schema.sql
+      mode: never
       schema-locations: classpath:schema.sql
 
 mybatis:
@@ -43,8 +44,12 @@ logging:
 
 lottery:
   fetch:
-    hour: 22
-    minute: 30
+    cron: "0 30 22 * * ?"
+  cors:
+    allowed-origins: "*"
+  audit:
+    created-by: "system"
+    updated-by: "system"
   # ===== 鉴权配置 =====
   # 设置 token 后，写操作（POST /fetch）和推荐接口需携带 Authorization: Bearer {token}
   # 读取接口（GET /status, /analyze, /results 等）无需鉴权
