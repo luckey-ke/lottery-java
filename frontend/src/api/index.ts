@@ -17,7 +17,7 @@ const api = axios.create({ baseURL: '/api/lottery', timeout: 30000 })
 
 // 懒加载全局状态，避免循环依赖
 function getGlobal() {
-  return import('./composables/useGlobal').then(m => m.useGlobal())
+  return import('../composables/useGlobal').then(m => m.useGlobal())
 }
 
 // 响应拦截器 - 统一错误处理 + 全局 loading + toast
