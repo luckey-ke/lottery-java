@@ -1,15 +1,18 @@
 package com.lottery.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.lottery.entity.RecommendationHistory;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
-public interface RecommendationHistoryMapper {
+public interface RecommendationHistoryMapper extends BaseMapper<RecommendationHistory> {
 
+    /** upsert (XML 实现，兼容 SQLite/MySQL) */
     int upsert(RecommendationHistory record);
 
     @Select("SELECT * FROM recommendation_history WHERE lottery_type = #{type} AND recommend_date = #{date} ORDER BY strategy_index")
@@ -27,7 +30,6 @@ public interface RecommendationHistoryMapper {
     @Select("SELECT * FROM recommendation_history WHERE lottery_type = #{type} AND recommend_date = #{date}")
     List<RecommendationHistory> findByTypeAndDate(@Param("type") String type, @Param("date") String date);
 
-    // 统计：按策略分组的命中率
     @Select("SELECT strategy_name, " +
             "COUNT(*) as total, " +
             "SUM(CASE WHEN hit_main > 0 OR hit_extra > 0 THEN 1 ELSE 0 END) as hit_count, " +
@@ -38,9 +40,8 @@ public interface RecommendationHistoryMapper {
             "FROM recommendation_history " +
             "WHERE lottery_type = #{type} AND actual_numbers IS NOT NULL " +
             "GROUP BY strategy_name")
-    List<java.util.Map<String, Object>> getHitStats(@Param("type") String type);
+    List<Map<String, Object>> getHitStats(@Param("type") String type);
 
-    // 获取未匹配的记录
     @Select("SELECT * FROM recommendation_history WHERE lottery_type = #{type} AND actual_numbers IS NULL ORDER BY recommend_date")
     List<RecommendationHistory> findUnmatched(@Param("type") String type);
 }

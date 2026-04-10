@@ -1,5 +1,6 @@
 package com.lottery.mapper;
 
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.lottery.entity.FetchHistoryDetail;
 import com.lottery.entity.FetchHistoryTask;
 import org.apache.ibatis.annotations.Mapper;
@@ -10,10 +11,12 @@ import java.util.List;
 import java.util.Map;
 
 @Mapper
-public interface FetchHistoryMapper {
+public interface FetchHistoryMapper extends BaseMapper<FetchHistoryTask> {
 
+    /** upsertTask (XML 实现，兼容 SQLite/MySQL) */
     int upsertTask(FetchHistoryTask task);
 
+    /** upsertDetail (XML 实现，兼容 SQLite/MySQL) */
     int upsertDetail(FetchHistoryDetail detail);
 
     @Select({
@@ -52,7 +55,7 @@ public interface FetchHistoryMapper {
     FetchHistoryTask findTaskById(@Param("taskId") String taskId);
 
     @Select("SELECT task_id, status FROM fetch_history_task WHERE status IN ('pending', 'running')")
-    List<java.util.Map<String, Object>> findUnfinishedTaskIds();
+    List<Map<String, Object>> findUnfinishedTaskIds();
 
     @Select("SELECT id, task_id AS taskId, lottery_type AS lotteryType, name, scope, status, current_page AS currentPage, total_fetched AS totalFetched, inserted, updated, error, sort_order AS sortOrder, created_at AS createdAt, updated_at AS updatedAt FROM fetch_history_detail WHERE task_id = #{taskId} ORDER BY sort_order ASC, id ASC")
     List<FetchHistoryDetail> listDetailsByTaskId(@Param("taskId") String taskId);

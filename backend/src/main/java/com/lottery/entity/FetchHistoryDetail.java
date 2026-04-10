@@ -1,9 +1,12 @@
 package com.lottery.entity;
 
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 @Data
+@TableName("fetch_history_detail")
 public class FetchHistoryDetail {
+    @TableId(type = IdType.AUTO)
     private Integer id;
     private String taskId;
     private String lotteryType;

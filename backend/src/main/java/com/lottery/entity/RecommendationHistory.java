@@ -1,9 +1,12 @@
 package com.lottery.entity;
 
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 @Data
+@TableName("recommendation_history")
 public class RecommendationHistory {
+    @TableId(type = IdType.AUTO)
     private Integer id;
     private String lotteryType;
     private String recommendDate;
