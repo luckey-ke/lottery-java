@@ -1,6 +1,7 @@
 package com.lottery.service.impl;
 
 import com.lottery.entity.LotteryType;
+import com.lottery.service.FetchHistoryService;
 import com.lottery.service.FetchService;
 import com.lottery.service.impl.fetcher.FetchProgressCallback;
 import com.lottery.service.impl.fetcher.ZhcwHtmlFetcher;
@@ -29,6 +30,7 @@ public class FetchServiceImpl implements FetchService {
 
     private static final int FETCH_ALL_THREAD_COUNT = 6;
 
+    private final FetchHistoryService fetchHistoryService;
     private final ZhcwHtmlFetcher zhcwHtmlFetcher;
     private final ZhcwJsonFetcher zhcwJsonFetcher;
     private final FetchTaskManager taskManager;
@@ -57,7 +59,7 @@ public class FetchServiceImpl implements FetchService {
 
     @Override
     public Map<String, Object> fetchAll(String scope, Integer count) {
-        return runFetchAll(resolveScope(scope, count));
+        return runFetchAll(resolveScope(scope, count), null);
     }
 
     @Override
