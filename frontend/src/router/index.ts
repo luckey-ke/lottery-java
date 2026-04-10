@@ -1,15 +1,55 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
-const routes: RouteRecordRaw[] = [
+// 公开页面 — 所有人可访问
+const publicRoutes: RouteRecordRaw[] = [
   { path: '/', name: 'Dashboard', component: () => import('../views/Dashboard.vue') },
-  { path: '/admin', name: 'Admin', component: () => import('../views/Admin.vue') },
-  { path: '/history', name: 'FetchHistory', component: () => import('../views/FetchHistory.vue') },
   { path: '/analysis', name: 'Analysis', component: () => import('../views/Analysis.vue') },
   { path: '/trend', name: 'Trend', component: () => import('../views/Trend.vue') },
   { path: '/recommend', name: 'Recommend', component: () => import('../views/Recommend.vue') },
 ]
 
-export default createRouter({
+// 管理页面 — 仅管理员
+const adminRoutes: RouteRecordRaw[] = [
+  { path: '/admin', name: 'Admin', component: () => import('../views/Admin.vue'), meta: { requiresAdmin: true } },
+  { path: '/history', name: 'FetchHistory', component: () => import('../views/FetchHistory.vue'), meta: { requiresAdmin: true } },
+]
+
+// 认证页面
+const authRoutes: RouteRecordRaw[] = [
+  { path: '/login', name: 'Login', component: () => import('../views/Login.vue'), meta: { guestOnly: true } },
+  { path: '/register', name: 'Register', component: () => import('../views/Register.vue'), meta: { guestOnly: true } },
+]
+
+const routes: RouteRecordRaw[] = [...publicRoutes, ...adminRoutes, ...authRoutes]
+
+const router = createRouter({
   history: createWebHistory(),
   routes,
 })
+
+// 路由守卫
+router.beforeEach((to, _from, next) => {
+  const token = localStorage.getItem('lottery_token')
+  const user = JSON.parse(localStorage.getItem('lottery_user') || 'null')
+  const isLoggedIn = !!token
+  const isAdmin = user?.role === 'ADMIN'
+
+  // 需要管理员权限的页面
+  if (to.meta.requiresAdmin) {
+    if (!isLoggedIn) {
+      return next({ path: '/login', query: { redirect: to.fullPath } })
+    }
+    if (!isAdmin) {
+      return next('/')
+    }
+  }
+
+  // 仅游客页面（已登录跳转首页）
+  if (to.meta.guestOnly && isLoggedIn) {
+    return next('/')
+  }
+
+  next()
+})
+
+export default router

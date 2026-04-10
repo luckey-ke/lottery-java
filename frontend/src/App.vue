@@ -13,14 +13,9 @@
           <span class="brand-text">Lottery<span class="brand-accent">Lab</span></span>
         </div>
         <nav class="nav">
+          <!-- 公开页面 -->
           <router-link to="/" class="nav-item" active-class="active">
             <span class="nav-icon">📊</span> 总览
-          </router-link>
-          <router-link to="/admin" class="nav-item" active-class="active">
-            <span class="nav-icon">⚙️</span> 管理
-          </router-link>
-          <router-link to="/history" class="nav-item" active-class="active">
-            <span class="nav-icon">📋</span> 历史
           </router-link>
           <router-link to="/analysis" class="nav-item" active-class="active">
             <span class="nav-icon">📈</span> 分析
@@ -31,8 +26,30 @@
           <router-link to="/recommend" class="nav-item" active-class="active">
             <span class="nav-icon">🎯</span> 推荐
           </router-link>
+
+          <!-- 管理页面（仅管理员可见） -->
+          <template v-if="isAdmin">
+            <div class="nav-divider"></div>
+            <router-link to="/admin" class="nav-item" active-class="active">
+              <span class="nav-icon">⚙️</span> 管理
+            </router-link>
+            <router-link to="/history" class="nav-item" active-class="active">
+              <span class="nav-icon">📋</span> 历史
+            </router-link>
+          </template>
         </nav>
+
+        <!-- 登录/用户信息 -->
         <div class="header-actions">
+          <template v-if="isLoggedIn">
+            <span class="user-badge" :class="{ 'is-admin': isAdmin }">
+              {{ isAdmin ? '👑' : '👤' }} {{ user?.nickname || user?.username }}
+            </span>
+            <button class="btn-logout" @click="handleLogout">退出</button>
+          </template>
+          <template v-else>
+            <router-link to="/login" class="btn-login">登录</router-link>
+          </template>
         </div>
       </div>
     </header>
@@ -55,9 +72,13 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useGlobal } from './composables/useGlobal'
+import { useAuth } from './composables/useAuth'
 
+const router = useRouter()
 const { message, messageType, isLoading, dismissToast } = useGlobal()
+const { isLoggedIn, isAdmin, user, logout } = useAuth()
 
 const toastIcon = computed(() => {
   switch (messageType.value) {
@@ -67,9 +88,65 @@ const toastIcon = computed(() => {
     default: return 'ℹ️'
   }
 })
+
+function handleLogout() {
+  logout()
+  router.push('/login')
+}
 </script>
 
 <style>
 @import './styles/variables.css';
 @import './styles/global.css';
+
+/* Nav divider */
+.nav-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* User badge */
+.user-badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  background: var(--bg);
+  border-radius: var(--radius);
+}
+.user-badge.is-admin {
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+/* Auth buttons */
+.btn-login {
+  padding: 8px 16px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+.btn-login:hover { opacity: 0.9; }
+
+.btn-logout {
+  padding: 6px 12px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-logout:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
 </style>

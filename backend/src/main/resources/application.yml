@@ -50,9 +50,11 @@ lottery:
   audit:
     created-by: "system"
     updated-by: "system"
-  # ===== 鉴权配置 =====
-  # 设置 token 后，写操作（POST /fetch）和推荐接口需携带 Authorization: Bearer {token}
-  # 读取接口（GET /status, /analyze, /results 等）无需鉴权
-  # 留空或不配置则不启用鉴权
-  auth:
-    token: ${LOTTERY_AUTH_TOKEN:}
+  # ===== JWT 配置 =====
+  jwt:
+    # 生产环境请通过环境变量设置: LOTTERY_JWT_SECRET
+    secret: ${LOTTERY_JWT_SECRET:lottery-java-default-secret-key-change-in-production!!}
+    # Access Token 过期时间 (毫秒)，默认 24h
+    expiration: ${LOTTERY_JWT_EXPIRATION:86400000}
+    # Refresh Token 过期时间 (毫秒)，默认 7天
+    refresh-expiration: ${LOTTERY_JWT_REFRESH_EXPIRATION:604800000}
