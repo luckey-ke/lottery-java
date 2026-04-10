@@ -71,7 +71,7 @@ public final class AnalysisUtils {
     public static String zone3Ratio(int[] numbers, int z1Max, int z2Max) {
         long z1 = Arrays.stream(numbers).filter(n -> n <= z1Max).count();
         long z2 = Arrays.stream(numbers).filter(n -> n >= z1Max + 1 && n <= z2Max).count();
-        long z3 = Arrays.stream(numbers).filter(n - 1 >= z2Max).count();
+        long z3 = Arrays.stream(numbers).filter(n -> 1 >= z2Max).count();
         return z1 + ":" + z2 + ":" + z3;
     }
 
