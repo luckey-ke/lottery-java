@@ -57,6 +57,16 @@
           />
         </div>
 
+        <div v-if="inviteCodeRequired" class="field">
+          <label class="field-label">管理员邀请码（选填）</label>
+          <input
+            v-model="form.inviteCode"
+            type="text"
+            class="input"
+            placeholder="填写邀请码可获得管理员权限"
+          />
+        </div>
+
         <div v-if="error" class="auth-error">{{ error }}</div>
 
         <button type="submit" class="btn-primary" :disabled="loading">
@@ -72,9 +82,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
+import api from '../api'
 
 const router = useRouter()
 const { register } = useAuth()
@@ -84,9 +95,18 @@ const form = reactive({
   password: '',
   confirmPassword: '',
   nickname: '',
+  inviteCode: '',
 })
 const loading = ref(false)
 const error = ref('')
+const inviteCodeRequired = ref(false)
+
+onMounted(async () => {
+  try {
+    const { data } = await api.authConfig()
+    inviteCodeRequired.value = data.inviteCodeRequired
+  } catch { /* ignore */ }
+})
 
 async function handleRegister() {
   error.value = ''
@@ -96,7 +116,7 @@ async function handleRegister() {
   }
   loading.value = true
   try {
-    await register(form.username, form.password, form.nickname || undefined)
+    await register(form.username, form.password, form.nickname || undefined, form.inviteCode || undefined)
     router.push('/')
   } catch (e: any) {
     error.value = e?.response?.data?.error || '注册失败'

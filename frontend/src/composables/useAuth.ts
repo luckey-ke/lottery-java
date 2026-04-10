@@ -43,8 +43,8 @@ async function login(username: string, password: string) {
   return data
 }
 
-async function register(username: string, password: string, nickname?: string) {
-  const { data } = await api.register(username, password, nickname)
+async function register(username: string, password: string, nickname?: string, inviteCode?: string) {
+  const { data } = await api.register(username, password, nickname, inviteCode)
   saveAuth(data.token, data.refreshToken, data.user)
   return data
 }

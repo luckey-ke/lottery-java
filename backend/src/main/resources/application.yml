@@ -58,3 +58,8 @@ lottery:
     expiration: ${LOTTERY_JWT_EXPIRATION:86400000}
     # Refresh Token 过期时间 (毫秒)，默认 7天
     refresh-expiration: ${LOTTERY_JWT_REFRESH_EXPIRATION:604800000}
+  # ===== 管理员邀请码 =====
+  # 注册时填写邀请码直接获得 ADMIN 角色
+  # 生产环境请通过环境变量设置: LOTTERY_ADMIN_INVITE_CODE
+  auth:
+    admin-invite-code: ${LOTTERY_ADMIN_INVITE_CODE:}

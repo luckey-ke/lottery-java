@@ -5,16 +5,17 @@ import com.lottery.common.JwtUtils;
 import com.lottery.entity.User;
 import com.lottery.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
- * 认证接口 — 注册 / 登录 / 刷新Token / 获取当前用户信息
+ * 认证接口 — 注册 / 登录 / 刷新Token / 用户信息 / 管理员操作
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -27,12 +28,16 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
 
-    /** 注册 */
+    @Value("${lottery.auth.admin-invite-code:}")
+    private String adminInviteCode;
+
+    /** 注册（可选邀请码） */
     @PostMapping("/register")
     public Map<String, Object> register(@RequestBody Map<String, String> body) {
         String username = body.get("username");
         String password = body.get("password");
         String nickname = body.getOrDefault("nickname", username);
+        String inviteCode = body.get("inviteCode");
 
         if (username == null || username.isBlank() || password == null || password.isBlank()) {
             throw BusinessException.badRequest("用户名和密码不能为空");
@@ -48,17 +53,24 @@ public class AuthController {
             throw BusinessException.badRequest("用户名已存在");
         }
 
+        // 判断邀请码
+        String role = User.ROLE_USER;
+        if (adminInviteCode != null && !adminInviteCode.isBlank()
+                && adminInviteCode.equals(inviteCode)) {
+            role = User.ROLE_ADMIN;
+        }
+
         String now = LocalDateTime.now().format(TS_FMT);
         User user = new User();
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
-        user.setRole(User.ROLE_USER);
+        user.setRole(role);
         user.setNickname(nickname);
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
         userMapper.insert(user);
 
-        String token = jwtUtils.generateAccessToken(username, User.ROLE_USER);
+        String token = jwtUtils.generateAccessToken(username, role);
         String refreshToken = jwtUtils.generateRefreshToken(username);
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -98,15 +110,15 @@ public class AuthController {
     /** 刷新 Token */
     @PostMapping("/refresh")
     public Map<String, Object> refresh(@RequestBody Map<String, String> body) {
-        String refreshToken = body.get("refreshToken");
-        if (refreshToken == null || !jwtUtils.validateToken(refreshToken)) {
+        String refreshTokenValue = body.get("refreshToken");
+        if (refreshTokenValue == null || !jwtUtils.validateToken(refreshTokenValue)) {
             throw BusinessException.badRequest("无效的刷新令牌");
         }
-        if (!"refresh".equals(jwtUtils.getTokenType(refreshToken))) {
+        if (!"refresh".equals(jwtUtils.getTokenType(refreshTokenValue))) {
             throw BusinessException.badRequest("令牌类型错误");
         }
 
-        String username = jwtUtils.getUsername(refreshToken);
+        String username = jwtUtils.getUsername(refreshTokenValue);
         User user = userMapper.findByUsername(username);
         if (user == null) {
             throw BusinessException.badRequest("用户不存在");
@@ -123,20 +135,77 @@ public class AuthController {
 
     /** 获取当前登录用户信息 */
     @GetMapping("/me")
-    public Map<String, Object> me(@RequestAttribute(required = false) String username) {
-        // 从 SecurityContext 获取
-        var auth = org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication();
-        if (auth == null) {
-            throw new BusinessException(401, "未登录");
-        }
-        String currentUsername = auth.getName();
+    public Map<String, Object> me() {
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
         User user = userMapper.findByUsername(currentUsername);
         if (user == null) {
             throw new BusinessException(401, "用户不存在");
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("user", userInfo(user));
+        return result;
+    }
+
+    // ===== 管理员接口 =====
+
+    /** 查看所有用户（仅管理员） */
+    @GetMapping("/users")
+    public Map<String, Object> listUsers(
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        List<User> users = userMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<User>()
+                        .select(User::getId, User::getUsername, User::getNickname,
+                                User::getRole, User::getCreatedAt)
+                        .orderByDesc(User::getCreatedAt)
+                        .last("LIMIT " + limit + " OFFSET " + offset));
+        int total = Math.toIntExact(userMapper.selectCount(null));
+
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (User u : users) list.add(userInfo(u));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("data", list);
+        result.put("total", total);
+        return result;
+    }
+
+    /** 提升/降级用户角色（仅管理员） */
+    @PutMapping("/users/{id}/role")
+    public Map<String, Object> updateRole(
+            @PathVariable Integer id,
+            @RequestBody Map<String, String> body) {
+        String newRole = body.get("role");
+        if (newRole == null || (!newRole.equals("ADMIN") && !newRole.equals("USER"))) {
+            throw BusinessException.badRequest("角色只能是 ADMIN 或 USER");
+        }
+
+        User user = userMapper.selectById(id);
+        if (user == null) {
+            throw BusinessException.badRequest("用户不存在");
+        }
+
+        // 不能修改自己
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        if (user.getUsername().equals(currentUsername)) {
+            throw BusinessException.badRequest("不能修改自己的角色");
+        }
+
+        user.setRole(newRole);
+        user.setUpdatedAt(LocalDateTime.now().format(TS_FMT));
+        userMapper.updateById(user);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("message", "角色已更新为 " + newRole);
+        result.put("user", userInfo(user));
+        return result;
+    }
+
+    /** 是否需要邀请码注册（前端用于判断是否显示邀请码输入框） */
+    @GetMapping("/config")
+    public Map<String, Object> config() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("inviteCodeRequired", adminInviteCode != null && !adminInviteCode.isBlank());
         return result;
     }
 

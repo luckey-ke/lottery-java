@@ -88,13 +88,20 @@ export default {
   // ===== 认证 =====
   login: (username: string, password: string) =>
     authApi.post('/login', { username, password }),
-  register: (username: string, password: string, nickname?: string) =>
-    authApi.post('/register', withParams({ username, password, nickname })),
+  register: (username: string, password: string, nickname?: string, inviteCode?: string) =>
+    authApi.post('/register', withParams({ username, password, nickname, inviteCode })),
   refreshToken: (refreshToken: string) =>
     authApi.post('/refresh', { refreshToken }),
   me: () => authApi.get('/me', {
     headers: { Authorization: `Bearer ${localStorage.getItem('lottery_token')}` }
   }),
+  authConfig: () => authApi.get('/config'),
+
+  // ===== 管理员 =====
+  listUsers: (limit = 20, offset = 0): Promise<AxiosResponse<{ data: any[]; total: number }>> =>
+    api.get('/auth/users', { params: { limit, offset } }),
+  updateUserRole: (id: number, role: string) =>
+    api.put(`/auth/users/${id}/role`, { role }),
 
   // ===== 状态 =====
   status: (): Promise<AxiosResponse<LotteryStatus>> => api.get('/status'),

@@ -36,6 +36,9 @@
             <router-link to="/history" class="nav-item" active-class="active">
               <span class="nav-icon">📋</span> 历史
             </router-link>
+            <router-link to="/users" class="nav-item" active-class="active">
+              <span class="nav-icon">👥</span> 用户
+            </router-link>
           </template>
         </nav>
 

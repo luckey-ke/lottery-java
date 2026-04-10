@@ -40,7 +40,13 @@ public class SecurityConfig {
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // 公开接口 — 无需认证
-                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/auth/login").permitAll()
+                .requestMatchers("/api/auth/register").permitAll()
+                .requestMatchers("/api/auth/refresh").permitAll()
+                .requestMatchers("/api/auth/config").permitAll()
+
+                // 管理员接口
+                .requestMatchers("/api/auth/users/**").hasRole("ADMIN")
 
                 // GET 读取接口 — 公开
                 .requestMatchers(HttpMethod.GET, "/api/lottery/status").permitAll()
