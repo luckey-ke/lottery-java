@@ -4,7 +4,7 @@
 <mapper namespace="com.lottery.mapper.LotteryResultMapper">
 
     <!-- UPSERT（SQLite 用 ON CONFLICT，MySQL 需改为 INSERT ... ON DUPLICATE KEY UPDATE） -->
-    <insert id="upsertReal" databaseId="sqlite">
+    <insert id="upsertReal">
         INSERT INTO lottery_result(lottery_type, draw_num, draw_date, numbers, extra_info, fetched_at, created_at, created_by, updated_at, updated_by)
         VALUES(#{lotteryType}, #{drawNum}, #{drawDate}, #{numbers}, #{extraInfo}, #{fetchedAt}, #{createdAt}, #{createdBy}, #{updatedAt}, #{updatedBy})
         ON CONFLICT(lottery_type, draw_num) DO UPDATE SET
@@ -112,7 +112,7 @@
     </delete>
 
     <!-- 批量插入（SQLite 用 INSERT OR IGNORE） -->
-    <insert id="batchInsert" databaseId="sqlite">
+    <insert id="batchInsert">
         INSERT OR IGNORE INTO lottery_result(lottery_type, draw_num, draw_date, numbers, extra_info, fetched_at, created_at, created_by, updated_at, updated_by)
         VALUES
         <foreach collection="list" item="item" separator=",">

@@ -4,7 +4,7 @@
 <mapper namespace="com.lottery.mapper.RecommendationHistoryMapper">
 
     <!-- upsert (SQLite) -->
-    <insert id="upsert" databaseId="sqlite">
+    <insert id="upsert">
         INSERT INTO recommendation_history(lottery_type, recommend_date, strategy_name, strategy_index,
             recommended_numbers, actual_numbers, hit_main, hit_extra, created_at, updated_at)
         VALUES(#{lotteryType}, #{recommendDate}, #{strategyName}, #{strategyIndex},

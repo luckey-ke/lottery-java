@@ -3,8 +3,8 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.lottery.mapper.FetchHistoryMapper">
 
-    <!-- upsertTask (SQLite) -->
-    <insert id="upsertTask" databaseId="sqlite">
+    <!-- upsertTask (默认 SQLite 兼容) -->
+    <insert id="upsertTask">
         INSERT INTO fetch_history_task(task_id, trigger_source, type, scope, mode, status, current_type, current_page, total_fetched, inserted, updated, completed_types, total_types, error, started_at, finished_at, created_at, updated_at)
         VALUES(#{taskId}, #{triggerSource}, #{type}, #{scope}, #{mode}, #{status}, #{currentType}, #{currentPage}, #{totalFetched}, #{inserted}, #{updated}, #{completedTypes}, #{totalTypes}, #{error}, #{startedAt}, #{finishedAt}, #{createdAt}, #{updatedAt})
         ON CONFLICT(task_id) DO UPDATE SET
@@ -49,8 +49,8 @@
             updated_at = VALUES(updated_at)
     </insert>
 
-    <!-- upsertDetail (SQLite) -->
-    <insert id="upsertDetail" databaseId="sqlite">
+    <!-- upsertDetail (默认 SQLite 兼容) -->
+    <insert id="upsertDetail">
         INSERT INTO fetch_history_detail(task_id, lottery_type, name, scope, status, current_page, total_fetched, inserted, updated, error, sort_order, created_at, updated_at)
         VALUES(#{taskId}, #{lotteryType}, #{name}, #{scope}, #{status}, #{currentPage}, #{totalFetched}, #{inserted}, #{updated}, #{error}, #{sortOrder}, #{createdAt}, #{updatedAt})
         ON CONFLICT(task_id, lottery_type) DO UPDATE SET
