@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lottery.mapper.MenuMapper">
+
+    <!-- 根据角色ID列表查询菜单（目录+菜单，不含按钮） -->
+    <select id="selectMenusByRoleIds" resultType="com.lottery.entity.Menu">
+        SELECT DISTINCT m.menu_id, m.menu_name, m.parent_id, m.order_num,
+               m.path, m.component, m.menu_type, m.perms, m.icon, m.visible, m.status
+        FROM sys_menu m
+        INNER JOIN sys_role_menu rm ON m.menu_id = rm.menu_id
+        WHERE rm.role_id IN
+        <foreach collection="roleIds" item="rid" open="(" separator="," close=")">
+            #{rid}
+        </foreach>
+        AND m.status = '0'
+        ORDER BY m.parent_id, m.order_num
+    </select>
+
+    <!-- 根据角色ID列表查询所有权限标识 -->
+    <select id="selectPermsByRoleIds" resultType="java.lang.String">
+        SELECT DISTINCT m.perms
+        FROM sys_menu m
+        INNER JOIN sys_role_menu rm ON m.menu_id = rm.menu_id
+        WHERE rm.role_id IN
+        <foreach collection="roleIds" item="rid" open="(" separator="," close=")">
+            #{rid}
+        </foreach>
+        AND m.status = '0'
+        AND m.perms IS NOT NULL
+        AND m.perms != ''
+    </select>
+
+    <!-- 查询所有正常状态的菜单 -->
+    <select id="selectMenuTreeAll" resultType="com.lottery.entity.Menu">
+        SELECT menu_id, menu_name, parent_id, order_num,
+               path, component, menu_type, perms, icon, visible, status
+        FROM sys_menu
+        WHERE status = '0'
+        ORDER BY parent_id, order_num
+    </select>
+
+    <!-- 根据菜单ID列表查询 -->
+    <select id="selectByMenuIds" resultType="com.lottery.entity.Menu">
+        SELECT menu_id, menu_name, parent_id, order_num,
+               path, component, menu_type, perms, icon, visible, status
+        FROM sys_menu
+        WHERE menu_id IN
+        <foreach collection="menuIds" item="mid" open="(" separator="," close=")">
+            #{mid}
+        </foreach>
+        ORDER BY parent_id, order_num
+    </select>
+
+</mapper>

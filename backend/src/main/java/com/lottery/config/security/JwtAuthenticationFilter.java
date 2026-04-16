@@ -14,10 +14,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * JWT 认证过滤器 — 从请求头提取 Token，设置 SecurityContext
+ * 角色以 ROLE_xxx 形式、权限以 perms:xxx 形式放入 authorities
  */
 @Slf4j
 @Component
@@ -35,12 +37,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = header.substring(7);
             if (jwtUtils.validateToken(token)) {
                 String username = jwtUtils.getUsername(token);
-                String role = jwtUtils.getRole(token);
 
                 if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                    var authorities = role != null
-                            ? List.of(new SimpleGrantedAuthority("ROLE_" + role))
-                            : List.<SimpleGrantedAuthority>of();
+                    List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+
+                    // 角色 → ROLE_xxx
+                    List<String> roleKeys = jwtUtils.getRoleKeys(token);
+                    for (String role : roleKeys) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()));
+                    }
+
+                    // 权限 → perms:xxx
+                    List<String> perms = jwtUtils.getPermissions(token);
+                    for (String perm : perms) {
+                        authorities.add(new SimpleGrantedAuthority("perms:" + perm));
+                    }
 
                     var authentication = new UsernamePasswordAuthenticationToken(username, null, authorities);
                     SecurityContextHolder.getContext().setAuthentication(authentication);

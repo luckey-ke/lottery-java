@@ -4,14 +4,42 @@
 <mapper namespace="com.lottery.mapper.UserMapper">
 
     <select id="findByUsername" resultType="com.lottery.entity.User">
-        SELECT id, username, password, role, nickname, created_at, updated_at
+        SELECT id, username, password, nickname, email, phone, sex, avatar,
+               status, del_flag, login_ip, login_date, created_at, updated_at
         FROM sys_user
-        WHERE username = #{username}
+        WHERE username = #{username} AND del_flag = '0'
         LIMIT 1
     </select>
 
     <select id="existsByUsername" resultType="int">
-        SELECT COUNT(1) FROM sys_user WHERE username = #{username}
+        SELECT COUNT(1) FROM sys_user WHERE username = #{username} AND del_flag = '0'
+    </select>
+
+    <!-- 查询用户及其角色ID列表 -->
+    <select id="selectUserWithRoles" resultType="com.lottery.entity.User">
+        SELECT u.id, u.username, u.nickname, u.email, u.phone, u.sex, u.avatar,
+               u.status, u.del_flag, u.login_ip, u.login_date, u.created_at, u.updated_at
+        FROM sys_user u
+        WHERE u.id = #{userId} AND u.del_flag = '0'
+        LIMIT 1
+    </select>
+
+    <!-- 分页查询用户列表 -->
+    <select id="selectUserList" resultType="com.lottery.entity.User">
+        SELECT u.id, u.username, u.nickname, u.email, u.phone, u.sex, u.avatar,
+               u.status, u.login_date, u.created_at
+        FROM sys_user u
+        WHERE u.del_flag = '0'
+        <if test="username != null and username != ''">
+            AND u.username LIKE CONCAT('%', #{username}, '%')
+        </if>
+        <if test="phone != null and phone != ''">
+            AND u.phone LIKE CONCAT('%', #{phone}, '%')
+        </if>
+        <if test="status != null and status != ''">
+            AND u.status = #{status}
+        </if>
+        ORDER BY u.id DESC
     </select>
 
 </mapper>

@@ -2,8 +2,12 @@ package com.lottery.controller;
 
 import com.lottery.common.BusinessException;
 import com.lottery.common.JwtUtils;
+import com.lottery.entity.Menu;
+import com.lottery.entity.Role;
 import com.lottery.entity.User;
 import com.lottery.mapper.UserMapper;
+import com.lottery.mapper.UserRoleMapper;
+import com.lottery.service.PermissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -13,9 +17,10 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
- * 认证接口 — 注册 / 登录 / 刷新Token / 用户信息 / 管理员操作
+ * 认证接口 — 注册 / 登录 / 刷新Token / 用户信息
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -25,13 +30,15 @@ public class AuthController {
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final UserMapper userMapper;
+    private final UserRoleMapper userRoleMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
+    private final PermissionService permissionService;
 
     @Value("${lottery.auth.admin-invite-code:}")
     private String adminInviteCode;
 
-    /** 注册（可选邀请码） */
+    /** 注册 */
     @PostMapping("/register")
     public Map<String, Object> register(@RequestBody Map<String, String> body) {
         String username = body.get("username");
@@ -48,36 +55,40 @@ public class AuthController {
         if (password.length() < 6) {
             throw BusinessException.badRequest("密码长度不能少于 6 位");
         }
-
         if (userMapper.existsByUsername(username) > 0) {
             throw BusinessException.badRequest("用户名已存在");
-        }
-
-        // 判断邀请码
-        String role = User.ROLE_USER;
-        if (adminInviteCode != null && !adminInviteCode.isBlank()
-                && adminInviteCode.equals(inviteCode)) {
-            role = User.ROLE_ADMIN;
         }
 
         String now = LocalDateTime.now().format(TS_FMT);
         User user = new User();
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
-        user.setRole(role);
         user.setNickname(nickname);
+        user.setStatus(User.STATUS_NORMAL);
+        user.setDelFlag(User.DEL_FLAG_NORMAL);
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
         userMapper.insert(user);
 
-        String token = jwtUtils.generateAccessToken(username, role);
+        // 分配角色：邀请码 → admin，否则 → user
+        String roleKey = "user";
+        if (adminInviteCode != null && !adminInviteCode.isBlank()
+                && adminInviteCode.equals(inviteCode)) {
+            roleKey = "admin";
+        }
+        assignRole(user.getId(), roleKey);
+
+        // 生成 token
+        List<String> roleKeys = List.of(roleKey);
+        Set<String> perms = permissionService.getPermissions(user.getId());
+        String token = jwtUtils.generateAccessToken(username, roleKeys, new ArrayList<>(perms));
         String refreshToken = jwtUtils.generateRefreshToken(username);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("message", "注册成功");
         result.put("token", token);
         result.put("refreshToken", refreshToken);
-        result.put("user", userInfo(user));
+        result.put("user", userInfo(user, roleKeys, perms));
         return result;
     }
 
@@ -95,15 +106,28 @@ public class AuthController {
         if (user == null || !passwordEncoder.matches(password, user.getPassword())) {
             throw BusinessException.badRequest("用户名或密码错误");
         }
+        if (User.STATUS_DISABLE.equals(user.getStatus())) {
+            throw BusinessException.badRequest("账号已停用");
+        }
 
-        String token = jwtUtils.generateAccessToken(username, user.getRole());
+        // 加载角色和权限
+        List<Integer> roleIds = permissionService.getRoleIds(user.getId());
+        List<Role> roles = permissionService.getRoles(user.getId());
+        List<String> roleKeys = roles.stream().map(Role::getRoleKey).collect(Collectors.toList());
+        Set<String> perms = permissionService.getPermissions(user.getId());
+
+        // 更新登录信息
+        user.setLoginDate(LocalDateTime.now().format(TS_FMT));
+        userMapper.updateById(user);
+
+        String token = jwtUtils.generateAccessToken(username, roleKeys, new ArrayList<>(perms));
         String refreshToken = jwtUtils.generateRefreshToken(username);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("message", "登录成功");
         result.put("token", token);
         result.put("refreshToken", refreshToken);
-        result.put("user", userInfo(user));
+        result.put("user", userInfo(user, roleKeys, perms));
         return result;
     }
 
@@ -124,16 +148,20 @@ public class AuthController {
             throw BusinessException.badRequest("用户不存在");
         }
 
-        String newToken = jwtUtils.generateAccessToken(username, user.getRole());
+        List<Role> roles = permissionService.getRoles(user.getId());
+        List<String> roleKeys = roles.stream().map(Role::getRoleKey).collect(Collectors.toList());
+        Set<String> perms = permissionService.getPermissions(user.getId());
+
+        String token = jwtUtils.generateAccessToken(username, roleKeys, new ArrayList<>(perms));
         String newRefreshToken = jwtUtils.generateRefreshToken(username);
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("token", newToken);
+        result.put("token", token);
         result.put("refreshToken", newRefreshToken);
         return result;
     }
 
-    /** 获取当前登录用户信息 */
+    /** 获取当前登录用户信息（含角色、权限、菜单） */
     @GetMapping("/me")
     public Map<String, Object> me() {
         String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -141,67 +169,21 @@ public class AuthController {
         if (user == null) {
             throw new BusinessException(401, "用户不存在");
         }
+
+        List<Role> roles = permissionService.getRoles(user.getId());
+        List<String> roleKeys = roles.stream().map(Role::getRoleKey).collect(Collectors.toList());
+        Set<String> perms = permissionService.getPermissions(user.getId());
+        List<Menu> menus = permissionService.getMenus(user.getId());
+
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("user", userInfo(user));
+        result.put("user", userInfo(user, roleKeys, perms));
+        result.put("roles", roleKeys);
+        result.put("permissions", perms);
+        result.put("menus", menuTreeToList(menus));
         return result;
     }
 
-    // ===== 管理员接口 =====
-
-    /** 查看所有用户（仅管理员） */
-    @GetMapping("/users")
-    public Map<String, Object> listUsers(
-            @RequestParam(defaultValue = "20") int limit,
-            @RequestParam(defaultValue = "0") int offset) {
-        List<User> users = userMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<User>()
-                        .select(User::getId, User::getUsername, User::getNickname,
-                                User::getRole, User::getCreatedAt)
-                        .orderByDesc(User::getCreatedAt)
-                        .last("LIMIT " + limit + " OFFSET " + offset));
-        int total = Math.toIntExact(userMapper.selectCount(null));
-
-        List<Map<String, Object>> list = new ArrayList<>();
-        for (User u : users) list.add(userInfo(u));
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("data", list);
-        result.put("total", total);
-        return result;
-    }
-
-    /** 提升/降级用户角色（仅管理员） */
-    @PutMapping("/users/{id}/role")
-    public Map<String, Object> updateRole(
-            @PathVariable Integer id,
-            @RequestBody Map<String, String> body) {
-        String newRole = body.get("role");
-        if (newRole == null || (!newRole.equals("ADMIN") && !newRole.equals("USER"))) {
-            throw BusinessException.badRequest("角色只能是 ADMIN 或 USER");
-        }
-
-        User user = userMapper.selectById(id);
-        if (user == null) {
-            throw BusinessException.badRequest("用户不存在");
-        }
-
-        // 不能修改自己
-        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
-        if (user.getUsername().equals(currentUsername)) {
-            throw BusinessException.badRequest("不能修改自己的角色");
-        }
-
-        user.setRole(newRole);
-        user.setUpdatedAt(LocalDateTime.now().format(TS_FMT));
-        userMapper.updateById(user);
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("message", "角色已更新为 " + newRole);
-        result.put("user", userInfo(user));
-        return result;
-    }
-
-    /** 是否需要邀请码注册（前端用于判断是否显示邀请码输入框） */
+    /** 是否需要邀请码注册 */
     @GetMapping("/config")
     public Map<String, Object> config() {
         Map<String, Object> result = new LinkedHashMap<>();
@@ -209,13 +191,56 @@ public class AuthController {
         return result;
     }
 
-    private Map<String, Object> userInfo(User user) {
+    // ===== 内部方法 =====
+
+    /** 给用户分配角色 */
+    private void assignRole(Integer userId, String roleKey) {
+        // 先查 role_key 对应的 role_id
+        List<Role> allRoles = new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Role>()
+                .eq(Role::getRoleKey, roleKey)
+                .list();
+        if (!allRoles.isEmpty()) {
+            userRoleMapper.insertBatch(userId, List.of(allRoles.get(0).getRoleId()));
+        }
+    }
+
+    /** 构建用户信息 */
+    private Map<String, Object> userInfo(User user, List<String> roleKeys, Set<String> permissions) {
         Map<String, Object> info = new LinkedHashMap<>();
         info.put("id", user.getId());
         info.put("username", user.getUsername());
         info.put("nickname", user.getNickname());
-        info.put("role", user.getRole());
+        info.put("email", user.getEmail());
+        info.put("phone", user.getPhone());
+        info.put("avatar", user.getAvatar());
+        info.put("status", user.getStatus());
+        info.put("roles", roleKeys);
+        info.put("permissions", permissions);
         info.put("createdAt", user.getCreatedAt());
         return info;
+    }
+
+    /** 菜单树转平铺列表（前端需要的格式） */
+    private List<Map<String, Object>> menuTreeToList(List<Menu> tree) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Menu m : tree) {
+            if (Menu.TYPE_BUTTON.equals(m.getMenuType())) continue;
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("menuId", m.getMenuId());
+            map.put("menuName", m.getMenuName());
+            map.put("parentId", m.getParentId());
+            map.put("orderNum", m.getOrderNum());
+            map.put("path", m.getPath());
+            map.put("component", m.getComponent());
+            map.put("menuType", m.getMenuType());
+            map.put("perms", m.getPerms());
+            map.put("icon", m.getIcon());
+            map.put("visible", m.getVisible());
+            if (m.getChildren() != null && !m.getChildren().isEmpty()) {
+                map.put("children", menuTreeToList(m.getChildren()));
+            }
+            list.add(map);
+        }
+        return list;
     }
 }

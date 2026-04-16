@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Spring Security 配置 — 无状态 JWT 认证 + 角色权限
+ * Spring Security 配置 — 无状态 JWT 认证 + RBAC 角色权限
  */
 @Configuration
 @EnableWebSecurity
@@ -39,16 +39,18 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // 公开接口 — 无需认证
+                // ===== 公开接口 =====
                 .requestMatchers("/api/auth/login").permitAll()
                 .requestMatchers("/api/auth/register").permitAll()
                 .requestMatchers("/api/auth/refresh").permitAll()
                 .requestMatchers("/api/auth/config").permitAll()
 
-                // 管理员接口
-                .requestMatchers("/api/auth/users/**").hasRole("ADMIN")
+                // ===== 系统管理接口 — 仅管理员 =====
+                .requestMatchers("/api/system/users/**").hasRole("ADMIN")
+                .requestMatchers("/api/system/roles/**").hasRole("ADMIN")
+                .requestMatchers("/api/system/menus/**").hasRole("ADMIN")
 
-                // GET 读取接口 — 公开
+                // ===== GET 读取接口 — 公开（彩票数据） =====
                 .requestMatchers(HttpMethod.GET, "/api/lottery/status").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/lottery/results").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/lottery/latest").permitAll()
@@ -58,11 +60,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/lottery/recommend/history").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/lottery/recommend/stats").permitAll()
 
-                // 管理接口 — 需要 ADMIN 角色
-                .requestMatchers(HttpMethod.POST, "/api/lottery/fetch/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/lottery/fetch/**").hasRole("ADMIN")
+                // ===== 数据拉取 — 需要 ADMIN 角色或 lottery:lottery:fetch 权限 =====
+                .requestMatchers(HttpMethod.POST, "/api/lottery/fetch/**").hasAnyRole("ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/lottery/fetch/**").hasAnyRole("ADMIN")
 
-                // 其他需要认证
+                // ===== 其他需要认证 =====
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex
@@ -79,7 +81,7 @@ public class SecurityConfig {
                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     Map<String, Object> body = new LinkedHashMap<>();
                     body.put("code", 403);
-                    body.put("error", "权限不足，需要管理员权限");
+                    body.put("error", "权限不足");
                     response.getWriter().write(objectMapper.writeValueAsString(body));
                 })
             )
