@@ -5,6 +5,7 @@ import com.lottery.common.JwtUtils;
 import com.lottery.entity.Menu;
 import com.lottery.entity.Role;
 import com.lottery.entity.User;
+import com.lottery.mapper.RoleMapper;
 import com.lottery.mapper.UserMapper;
 import com.lottery.mapper.UserRoleMapper;
 import com.lottery.service.PermissionService;
@@ -30,6 +31,7 @@ public class AuthController {
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final UserMapper userMapper;
+    private final RoleMapper roleMapper;
     private final UserRoleMapper userRoleMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
@@ -195,12 +197,11 @@ public class AuthController {
 
     /** 给用户分配角色 */
     private void assignRole(Integer userId, String roleKey) {
-        // 先查 role_key 对应的 role_id
-        List<Role> allRoles = new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Role>()
-                .eq(Role::getRoleKey, roleKey)
-                .list();
-        if (!allRoles.isEmpty()) {
-            userRoleMapper.insertBatch(userId, List.of(allRoles.get(0).getRoleId()));
+        List<Role> roles = roleMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Role>()
+                        .eq(Role::getRoleKey, roleKey));
+        if (!roles.isEmpty()) {
+            userRoleMapper.insertBatch(userId, List.of(roles.get(0).getRoleId()));
         }
     }
 
