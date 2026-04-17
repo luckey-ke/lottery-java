@@ -217,7 +217,7 @@ public class AuthController {
 
     private void flattenMenuTree(List<Menu> tree, String target, List<Map<String, Object>> out) {
         for (Menu m : tree) {
-            if (Menu.TYPE_BUTTON.equals(m.getMenuType())) continue;
+            if (Menu.TYPE_BUTTON.equals(m.getMenuType()) || Menu.TYPE_DIR.equals(m.getMenuType())) continue;
             if (target.equals(m.getMenuLocation())) {
                 Map<String, Object> map = new LinkedHashMap<>();
                 map.put("menuId", m.getMenuId());
@@ -229,7 +229,6 @@ public class AuthController {
                 map.put("orderNum", m.getOrderNum());
                 out.add(map);
             }
-            // 递归子菜单（跨 location 的父目录下可能有本 location 的子菜单）
             if (m.getChildren() != null && !m.getChildren().isEmpty()) {
                 flattenMenuTree(m.getChildren(), target, out);
             }
