@@ -10,7 +10,23 @@
 
     <!-- 菜单树表格 -->
     <div class="table-section">
-      <div class="table-scroll">
+      <!-- 错误状态 -->
+      <div v-if="loadError" class="empty-state">
+        <span class="empty-icon">❌</span>
+        <span>{{ loadError }}</span>
+        <button class="btn-sm btn-outline" @click="loadMenus">重试</button>
+      </div>
+      <!-- 加载中 -->
+      <div v-else-if="loading" class="empty-state">
+        <span class="empty-icon">⏳</span>
+        <span>加载中...</span>
+      </div>
+      <!-- 空状态 -->
+      <div v-else-if="!menuTree.length" class="empty-state">
+        <span class="empty-icon">📂</span>
+        <span>暂无菜单数据</span>
+      </div>
+      <div v-else class="table-scroll">
         <table class="data-table">
           <thead>
             <tr>
@@ -58,13 +74,13 @@
                     <button class="btn-xs btn-danger" @click="confirmDelete(c)">删除</button>
                   </td>
                 </tr>
-                <template v-if="c.children?.length" v-for="c in m.children" :key="'b'+c.menuId">
+                <template v-if="c.children?.length">
                   <tr v-for="b in c.children" :key="b.menuId">
                     <td class="name-cell indent-2">
                       <span class="tree-icon">🔘</span>
                       {{ b.menuName }}
                     </td>
-                    <td><span class="type-tag F">按钮</span></td>
+                    <td><span class="type-tag F">{{ typeLabel(b.menuType) }}</span></td>
                     <td class="mono text-muted">{{ b.perms || '-' }}</td>
                     <td>-</td>
                     <td>{{ b.orderNum }}</td>
@@ -199,6 +215,8 @@ interface MenuItem {
 const { showToast } = useGlobal()
 
 const menuTree = ref<MenuItem[]>([])
+const loading = ref(false)
+const loadError = ref('')
 
 // 平铺菜单（供上级菜单选择用）
 const flatMenus = computed(() => {
@@ -228,8 +246,16 @@ function typeLabel(t: string) {
 }
 
 async function loadMenus() {
-  const { data } = await api.listMenus()
-  menuTree.value = data.data
+  loading.value = true
+  loadError.value = ''
+  try {
+    const { data } = await api.listMenus()
+    menuTree.value = data.data || []
+  } catch (e: any) {
+    loadError.value = e?.response?.data?.error || '加载菜单失败'
+  } finally {
+    loading.value = false
+  }
 }
 
 function openAdd(parent: MenuItem | null) {
@@ -321,6 +347,9 @@ onMounted(loadMenus)
 
 .actions-cell { display: flex; gap: 6px; }
 .btn-xs { padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; transition: all 0.2s; background: var(--bg-card); font-family: var(--font); }
+.btn-sm { padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; transition: all 0.2s; background: var(--bg-card); font-family: var(--font); }
+.btn-outline { color: var(--text-secondary); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
 .btn-accent { color: var(--accent); border-color: var(--accent); }
 .btn-accent:hover { background: var(--accent-bg); }
 .btn-danger { color: var(--red); border-color: var(--red); }
@@ -356,6 +385,9 @@ onMounted(loadMenus)
 .modal-leave-active .modal-card { animation: scaleIn 0.2s ease reverse; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 20px; color: var(--text-muted); font-size: 14px; }
+.empty-icon { font-size: 32px; }
 
 @media (max-width: 768px) {
   .page-hero { flex-direction: column; align-items: flex-start; }

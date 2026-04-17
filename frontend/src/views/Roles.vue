@@ -175,14 +175,18 @@ const deleteTarget = ref<RoleInfo | null>(null)
 const deleting = ref(false)
 
 async function loadRoles() {
-  const { data } = await api.listRoles()
-  roles.value = data.data
+  try {
+    const { data } = await api.listRoles()
+    roles.value = data.data || []
+  } catch { /* interceptor */ }
 }
 
 async function loadMenuTree() {
-  const { data } = await api.listMenus()
-  menuTree.value = data.data
-  allMenuIds.value = flattenMenuIds(data.data)
+  try {
+    const { data } = await api.listMenus()
+    menuTree.value = data.data || []
+    allMenuIds.value = flattenMenuIds(data.data || [])
+  } catch { /* interceptor */ }
 }
 
 function flattenMenuIds(items: MenuItem[]): number[] {
