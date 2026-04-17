@@ -159,7 +159,7 @@
             </div>
             <div class="form-field" v-if="editDialog.menuType !== 'F'">
               <label>图标</label>
-              <input v-model="editDialog.icon" class="input" placeholder="如：user、setting" />
+              <IconPicker v-model="editDialog.icon" />
             </div>
             <div class="form-row">
               <div class="form-field">
@@ -223,6 +223,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useGlobal } from '../composables/useGlobal'
 import api from '../api'
 import MenuIcon from '../components/MenuIcon.vue'
+import IconPicker from '../components/IconPicker.vue'
 
 interface MenuItem {
   menuId: number
