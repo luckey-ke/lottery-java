@@ -58,7 +58,7 @@
                 <td><span class="type-tag" :class="m.menuType">{{ typeLabel(m.menuType) }}</span></td>
                 <td><span class="location-tag" :class="m.menuLocation">{{ locationLabel(m.menuLocation) }}</span></td>
                 <td class="mono text-muted">{{ m.path || '-' }}</td>
-                <td class="icon-cell"><MenuIcon :name="m.icon" :size="18" fallback="-" /></td>
+                <td class="icon-cell"><MenuIcon :name="m.icon" :size="14" fallback="-" /></td>
                 <td>{{ m.orderNum }}</td>
                 <td><span :class="['status-dot', m.status === '0' ? 'active' : 'disabled']">{{ m.status === '0' ? '正常' : '停用' }}</span></td>
                 <td class="actions-cell">
@@ -81,7 +81,7 @@
                     <td><span class="type-tag" :class="c.menuType">{{ typeLabel(c.menuType) }}</span></td>
                     <td><span class="location-tag" :class="c.menuLocation">{{ locationLabel(c.menuLocation) }}</span></td>
                     <td class="mono text-muted">{{ c.perms || c.path || '-' }}</td>
-                    <td class="icon-cell"><MenuIcon :name="c.icon" :size="18" fallback="-" /></td>
+                    <td class="icon-cell"><MenuIcon :name="c.icon" :size="14" fallback="-" /></td>
                     <td>{{ c.orderNum }}</td>
                     <td><span :class="['status-dot', c.status === '0' ? 'active' : 'disabled']">{{ c.status === '0' ? '正常' : '停用' }}</span></td>
                     <td class="actions-cell">
@@ -390,6 +390,7 @@ onMounted(loadMenus)
 .data-table tr:hover td { background: var(--bg-card-hover); }
 .mono { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; }
 .text-muted { color: var(--text-muted); }
+.icon-cell { display: flex; align-items: center; }
 
 .name-cell { display: flex; align-items: center; gap: 6px; font-weight: 500; }
 .fold-btn { width: 20px; height: 20px; border: none; background: none; color: var(--text-muted); font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 4px; padding: 0; flex-shrink: 0; }
