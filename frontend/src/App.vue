@@ -27,25 +27,6 @@
             <span class="nav-icon">🎯</span> 推荐
           </router-link>
 
-          <!-- 管理页面（仅管理员可见） -->
-          <template v-if="isAdmin">
-            <div class="nav-divider"></div>
-            <router-link to="/admin" class="nav-item" active-class="active">
-              <span class="nav-icon">⚙️</span> 管理
-            </router-link>
-            <router-link to="/history" class="nav-item" active-class="active">
-              <span class="nav-icon">📋</span> 历史
-            </router-link>
-            <router-link to="/users" class="nav-item" active-class="active">
-              <span class="nav-icon">👥</span> 用户
-            </router-link>
-            <router-link to="/roles" class="nav-item" active-class="active">
-              <span class="nav-icon">🛡️</span> 角色
-            </router-link>
-            <router-link to="/menus" class="nav-item" active-class="active">
-              <span class="nav-icon">📂</span> 菜单
-            </router-link>
-          </template>
         </nav>
 
         <!-- 登录/用户信息 -->
@@ -66,6 +47,22 @@
                       <div class="dropdown-meta" v-if="user?.email">📧 {{ user?.email }}</div>
                     </div>
                   </div>
+                  <div class="dropdown-divider"></div>
+                  <router-link v-if="isAdmin" to="/admin" class="dropdown-item" @click="showUserMenu = false">
+                    <span>⚙️</span> 管理
+                  </router-link>
+                  <router-link v-if="isAdmin" to="/history" class="dropdown-item" @click="showUserMenu = false">
+                    <span>📋</span> 历史
+                  </router-link>
+                  <router-link v-if="isAdmin" to="/users" class="dropdown-item" @click="showUserMenu = false">
+                    <span>👥</span> 用户
+                  </router-link>
+                  <router-link v-if="isAdmin" to="/roles" class="dropdown-item" @click="showUserMenu = false">
+                    <span>🛡️</span> 角色
+                  </router-link>
+                  <router-link v-if="isAdmin" to="/menus" class="dropdown-item" @click="showUserMenu = false">
+                    <span>📂</span> 菜单
+                  </router-link>
                   <div class="dropdown-divider"></div>
                   <button class="dropdown-item" @click="openProfileDialog">
                     <span>✏️</span> 修改昵称
@@ -330,8 +327,11 @@ function handleLogout() {
   transition: background 0.15s;
   font-family: var(--font);
   text-align: left;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 .dropdown-item:hover { background: var(--bg); }
+a.dropdown-item { color: var(--text-primary); }
 .dropdown-logout { color: var(--red); }
 .dropdown-logout:hover { background: var(--red-bg); }
 
