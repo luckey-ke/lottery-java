@@ -16,14 +16,14 @@
 
       <nav class="sidebar-nav">
         <router-link
-          v-for="item in menuItems"
+          v-for="item in adminMenus"
           :key="item.path"
-          :to="item.path"
+          :to="'/admin/' + (item.path || '')"
           class="sidebar-item"
           active-class="active"
         >
-          <span class="sidebar-icon">{{ item.icon }}</span>
-          <span class="sidebar-text" v-if="!sidebarCollapsed">{{ item.label }}</span>
+          <span class="sidebar-icon">{{ item.icon || '📄' }}</span>
+          <span class="sidebar-text" v-if="!sidebarCollapsed">{{ item.menuName }}</span>
         </router-link>
       </nav>
 
@@ -58,25 +58,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
+import api from '../api'
 
 const { user, isAdmin } = useAuth()
 const route = useRoute()
 const sidebarCollapsed = ref(false)
 
-const menuItems = [
-  { path: '/admin', icon: '⚙️', label: '管理' },
-  { path: '/admin/history', icon: '📋', label: '历史' },
-  { path: '/admin/users', icon: '👥', label: '用户' },
-  { path: '/admin/roles', icon: '🛡️', label: '角色' },
-  { path: '/admin/menus', icon: '📂', label: '菜单' },
-]
+// 后台动态菜单
+const adminMenus = ref<Array<{ menuId: number; menuName: string; icon: string; path: string }>>([])
+
+async function loadAdminMenus() {
+  try {
+    const { data } = await api.getMenusByLocation('admin')
+    adminMenus.value = data.data || []
+  } catch { adminMenus.value = [] }
+}
+
+onMounted(loadAdminMenus)
 
 const currentTitle = computed(() => {
-  const item = menuItems.find(i => i.path === route.path)
-  return item ? `${item.icon} ${item.label}` : '后台管理'
+  const path = route.path.replace('/admin/', '').replace('/admin', '')
+  const item = adminMenus.value.find(i => i.path === path)
+  return item ? `${item.icon || '📄'} ${item.menuName}` : '后台管理'
 })
 </script>
 

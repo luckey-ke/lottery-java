@@ -35,6 +35,7 @@ const requestInterceptor = (config: any) => {
 }
 api.interceptors.request.use(requestInterceptor)
 systemApi.interceptors.request.use(requestInterceptor)
+authApi.interceptors.request.use(requestInterceptor)
 
 // ===== Refresh Token 自动续期 =====
 let refreshPromise: Promise<string | null> | null = null
@@ -124,6 +125,7 @@ const responseInterceptorError = async (error: any) => {
   }
 api.interceptors.response.use(responseInterceptorSuccess, responseInterceptorError)
 systemApi.interceptors.response.use(responseInterceptorSuccess, responseInterceptorError)
+authApi.interceptors.response.use(responseInterceptorSuccess, responseInterceptorError)
 
 function withParams(params: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
@@ -153,6 +155,8 @@ export default {
     authApi.put('/password', body, {
       headers: { Authorization: `Bearer ${localStorage.getItem('lottery_token')}` }
     }),
+  getMenusByLocation: (location: string) =>
+    authApi.get(`/menus/${location}`),
 
   // ===== 管理员 - 用户 =====
   listUsers: (limit = 20, offset = 0): Promise<AxiosResponse<{ data: any[]; total: number }>> =>

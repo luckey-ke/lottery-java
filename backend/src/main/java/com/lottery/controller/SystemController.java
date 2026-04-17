@@ -365,6 +365,7 @@ public class SystemController {
         menu.setIcon((String) body.get("icon"));
         menu.setVisible((String) body.getOrDefault("visible", Menu.VISIBLE_SHOW));
         menu.setStatus((String) body.getOrDefault("status", Menu.STATUS_NORMAL));
+        menu.setMenuLocation((String) body.getOrDefault("menuLocation", Menu.LOCATION_ADMIN));
         menu.setCreatedAt(now);
         menu.setUpdatedAt(now);
 
@@ -396,6 +397,7 @@ public class SystemController {
         if (body.containsKey("icon")) menu.setIcon((String) body.get("icon"));
         if (body.containsKey("visible")) menu.setVisible((String) body.get("visible"));
         if (body.containsKey("status")) menu.setStatus((String) body.get("status"));
+        if (body.containsKey("menuLocation")) menu.setMenuLocation((String) body.get("menuLocation"));
         menu.setUpdatedAt(LocalDateTime.now().format(TS_FMT));
 
         menuMapper.updateById(menu);

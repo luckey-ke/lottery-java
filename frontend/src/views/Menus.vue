@@ -36,6 +36,7 @@
             <tr>
               <th>菜单名称</th>
               <th>类型</th>
+              <th>位置</th>
               <th>路由/权限</th>
               <th>图标</th>
               <th>排序</th>
@@ -55,6 +56,7 @@
                   {{ m.menuName }}
                 </td>
                 <td><span class="type-tag" :class="m.menuType">{{ typeLabel(m.menuType) }}</span></td>
+                <td><span class="location-tag" :class="m.menuLocation">{{ locationLabel(m.menuLocation) }}</span></td>
                 <td class="mono text-muted">{{ m.path || '-' }}</td>
                 <td>{{ m.icon || '-' }}</td>
                 <td>{{ m.orderNum }}</td>
@@ -77,6 +79,7 @@
                       {{ c.menuName }}
                     </td>
                     <td><span class="type-tag" :class="c.menuType">{{ typeLabel(c.menuType) }}</span></td>
+                    <td><span class="location-tag" :class="c.menuLocation">{{ locationLabel(c.menuLocation) }}</span></td>
                     <td class="mono text-muted">{{ c.perms || c.path || '-' }}</td>
                     <td>{{ c.icon || '-' }}</td>
                     <td>{{ c.orderNum }}</td>
@@ -95,6 +98,7 @@
                         {{ b.menuName }}
                       </td>
                       <td><span class="type-tag F">{{ typeLabel(b.menuType) }}</span></td>
+                      <td><span class="location-tag" :class="b.menuLocation">{{ locationLabel(b.menuLocation) }}</span></td>
                       <td class="mono text-muted">{{ b.perms || '-' }}</td>
                       <td>-</td>
                       <td>{{ b.orderNum }}</td>
@@ -129,19 +133,13 @@
                 <option v-for="m in flatMenus" :key="m.menuId" :value="m.menuId">{{ m.menuName }}</option>
               </select>
             </div>
-            <div class="form-row">
-              <div class="form-field">
-                <label>菜单类型 <span class="req">*</span></label>
-                <select v-model="editDialog.menuType" class="input" required>
-                  <option value="M">目录</option>
-                  <option value="C">菜单</option>
-                  <option value="F">按钮</option>
-                </select>
-              </div>
-              <div class="form-field">
-                <label>排序</label>
-                <input v-model.number="editDialog.orderNum" type="number" class="input" placeholder="0" />
-              </div>
+            <div class="form-field">
+              <label>菜单类型 <span class="req">*</span></label>
+              <select v-model="editDialog.menuType" class="input" required>
+                <option value="M">目录</option>
+                <option value="C">菜单</option>
+                <option value="F">按钮</option>
+              </select>
             </div>
             <div class="form-field">
               <label>菜单名称 <span class="req">*</span></label>
@@ -162,6 +160,19 @@
             <div class="form-field" v-if="editDialog.menuType !== 'F'">
               <label>图标</label>
               <input v-model="editDialog.icon" class="input" placeholder="如：user、setting" />
+            </div>
+            <div class="form-row">
+              <div class="form-field">
+                <label>菜单位置 <span class="req">*</span></label>
+                <select v-model="editDialog.menuLocation" class="input" required>
+                  <option value="frontend">🌐 前台导航</option>
+                  <option value="admin">⚙️ 后台侧栏</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label>排序</label>
+                <input v-model.number="editDialog.orderNum" type="number" class="input" placeholder="0" />
+              </div>
             </div>
             <div class="form-row">
               <div class="form-field">
@@ -261,6 +272,10 @@ function typeLabel(t: string) {
   return { M: '目录', C: '菜单', F: '按钮' }[t] || t
 }
 
+function locationLabel(l: string) {
+  return { frontend: '🌐 前台', admin: '⚙️ 后台' }[l] || l || '⚙️ 后台'
+}
+
 // 折叠控制
 function toggleFold(menuId: number) {
   const s = new Set(foldedIds.value)
@@ -304,7 +319,7 @@ function openAdd(parent: MenuItem | null) {
   editDialog.value = {
     menuName: '', parentId: parent?.menuId || 0, orderNum: 0,
     path: '', component: '', menuType: parent ? (parent.menuType === 'M' ? 'C' : 'F') : 'M',
-    perms: '', icon: '', visible: '0', status: '0',
+    perms: '', icon: '', visible: '0', status: '0', menuLocation: 'admin',
   }
 }
 
@@ -314,6 +329,7 @@ function openEdit(m: MenuItem) {
     menuId: m.menuId, menuName: m.menuName, parentId: m.parentId, orderNum: m.orderNum,
     path: m.path || '', component: m.component || '', menuType: m.menuType,
     perms: m.perms || '', icon: m.icon || '', visible: m.visible, status: m.status,
+    menuLocation: m.menuLocation || 'admin',
   }
 }
 
@@ -385,6 +401,10 @@ onMounted(loadMenus)
 .type-tag.M { background: var(--blue-bg); color: var(--blue); }
 .type-tag.C { background: var(--green-bg); color: var(--green); }
 .type-tag.F { background: var(--orange-bg); color: var(--orange); }
+
+.location-tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+.location-tag.frontend { background: var(--green-bg); color: var(--green); }
+.location-tag.admin { background: var(--purple-bg); color: var(--purple); }
 
 .status-dot { font-size: 12px; font-weight: 600; }
 .status-dot.active { color: var(--green); }

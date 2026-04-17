@@ -44,6 +44,9 @@ public class Menu {
     /** 状态：0=正常 1=停用 */
     private String status;
 
+    /** 菜单位置：frontend=前台导航 admin=后台侧栏 */
+    private String menuLocation;
+
     private String createdAt;
     private String updatedAt;
 
@@ -62,4 +65,7 @@ public class Menu {
 
     public static final String VISIBLE_SHOW = "0";
     public static final String VISIBLE_HIDE = "1";
+
+    public static final String LOCATION_FRONTEND = "frontend";
+    public static final String LOCATION_ADMIN = "admin";
 }

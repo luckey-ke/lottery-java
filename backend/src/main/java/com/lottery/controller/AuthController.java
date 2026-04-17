@@ -193,6 +193,49 @@ public class AuthController {
         return result;
     }
 
+    /** 按位置获取菜单（frontend=前台导航 admin=后台侧栏） */
+    @GetMapping("/menus/{location}")
+    public Map<String, Object> getMenusByLocation(@PathVariable String location) {
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userMapper.findByUsername(currentUsername);
+        if (user == null) throw new BusinessException(401, "用户不存在");
+
+        List<Menu> menus = permissionService.getMenus(user.getId());
+
+        // 按 location 过滤，只返回目录和菜单类型
+        String target = location.equals("frontend") ? Menu.LOCATION_FRONTEND : Menu.LOCATION_ADMIN;
+        List<Map<String, Object>> result = new ArrayList<>();
+        flattenMenuTree(menus, target, result);
+
+        // 按 orderNum 排序
+        result.sort(Comparator.comparingInt(m -> (Integer) m.getOrDefault("orderNum", 0)));
+
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("data", result);
+        return res;
+    }
+
+    private void flattenMenuTree(List<Menu> tree, String target, List<Map<String, Object>> out) {
+        for (Menu m : tree) {
+            if (Menu.TYPE_BUTTON.equals(m.getMenuType())) continue;
+            if (target.equals(m.getMenuLocation())) {
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put("menuId", m.getMenuId());
+                map.put("menuName", m.getMenuName());
+                map.put("icon", m.getIcon());
+                map.put("path", m.getPath());
+                map.put("component", m.getComponent());
+                map.put("menuType", m.getMenuType());
+                map.put("orderNum", m.getOrderNum());
+                out.add(map);
+            }
+            // 递归子菜单（跨 location 的父目录下可能有本 location 的子菜单）
+            if (m.getChildren() != null && !m.getChildren().isEmpty()) {
+                flattenMenuTree(m.getChildren(), target, out);
+            }
+        }
+    }
+
     /** 修改个人资料（昵称） */
     @PutMapping("/profile")
     public Map<String, Object> updateProfile(@RequestBody Map<String, Object> body) {

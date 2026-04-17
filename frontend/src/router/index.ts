@@ -16,9 +16,9 @@ const adminRoutes: RouteRecordRaw = {
   children: [
     { path: '', name: 'AdminHome', component: () => import('../views/Admin.vue') },
     { path: 'history', name: 'AdminHistory', component: () => import('../views/FetchHistory.vue') },
-    { path: 'users', name: 'AdminUsers', component: () => import('../views/Users.vue') },
-    { path: 'roles', name: 'AdminRoles', component: () => import('../views/Roles.vue') },
-    { path: 'menus', name: 'AdminMenus', component: () => import('../views/Menus.vue') },
+    { path: 'user', name: 'AdminUsers', component: () => import('../views/Users.vue') },
+    { path: 'role', name: 'AdminRoles', component: () => import('../views/Roles.vue') },
+    { path: 'menu', name: 'AdminMenus', component: () => import('../views/Menus.vue') },
   ],
 }
 

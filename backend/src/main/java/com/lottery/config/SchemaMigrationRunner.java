@@ -348,6 +348,11 @@ public class SchemaMigrationRunner {
                         textType(), textType()
                 ));
             executeIndex("CREATE INDEX IF NOT EXISTS idx_sys_menu_parent_id ON sys_menu(parent_id)");
+            // 迁移：添加 menu_location 列
+            List<String> menuCols = getExistingColumns("sys_menu");
+            addColumnIfMissing("sys_menu", menuCols, "menu_location", textType() + " DEFAULT 'admin'");
+            // 迁移已有数据：前台页面设为 frontend
+            migrateMenuLocations();
             log.info("[SchemaMigration] sys_menu 表就绪");
         } catch (Exception e) {
             log.warn("[SchemaMigration] sys_menu 表创建失败: {}", e.getMessage());
@@ -381,6 +386,26 @@ public class SchemaMigrationRunner {
             log.info("[SchemaMigration] sys_role_menu 表就绪");
         } catch (Exception e) {
             log.warn("[SchemaMigration] sys_role_menu 表创建失败: {}", e.getMessage());
+        }
+    }
+
+    private void migrateMenuLocations() {
+        try {
+            // 将前台页面菜单设为 frontend（根据 path 匹配）
+            String[] frontendPaths = {"dashboard", "analysis", "trend", "recommend"};
+            for (String p : frontendPaths) {
+                jdbcTemplate.update(
+                        "UPDATE sys_menu SET menu_location = 'frontend' WHERE path = ? AND menu_location IS NULL",
+                        p
+                );
+            }
+            // 修正拉取历史的 path
+            jdbcTemplate.update(
+                    "UPDATE sys_menu SET path = 'history' WHERE menu_name = '拉取历史' AND path = 'fetch-history'"
+            );
+            log.info("[SchemaMigration] menu_location 数据迁移完成");
+        } catch (Exception e) {
+            log.debug("[SchemaMigration] menu_location 迁移跳过: {}", e.getMessage());
         }
     }
 
@@ -493,8 +518,8 @@ public class SchemaMigrationRunner {
 
                 // --- 数据总览 (目录) ---
                 jdbcTemplate.update(
-                        "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, perms, icon, visible, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        "数据总览", 0, 2, "dashboard", "Dashboard", "C", "lottery:dashboard:list", "dashboard", "0", "0", now, now
+                        "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, perms, icon, visible, status, menu_location, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "数据总览", 0, 2, "dashboard", "Dashboard", "C", "lottery:dashboard:list", "dashboard", "0", "0", "frontend", now, now
                 );
 
                 // --- 数据管理 (目录) ---
@@ -510,25 +535,25 @@ public class SchemaMigrationRunner {
                 );
                 jdbcTemplate.update(
                         "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, perms, icon, visible, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        "拉取历史", dataMenuId, 2, "fetch-history", "FetchHistory", "C", "lottery:fetch:history", "history", "0", "0", now, now
+                        "拉取历史", dataMenuId, 2, "history", "FetchHistory", "C", "lottery:fetch:history", "history", "0", "0", now, now
                 );
 
                 // --- 统计分析 ---
                 jdbcTemplate.update(
-                        "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, perms, icon, visible, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        "统计分析", 0, 4, "analysis", "Analysis", "C", "lottery:analysis:list", "chart", "0", "0", now, now
+                        "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, perms, icon, visible, status, menu_location, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "统计分析", 0, 4, "analysis", "Analysis", "C", "lottery:analysis:list", "chart", "0", "0", "frontend", now, now
                 );
 
                 // --- 趋势分析 ---
                 jdbcTemplate.update(
-                        "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, perms, icon, visible, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        "趋势分析", 0, 5, "trend", "Trend", "C", "lottery:trend:list", "trend-charts", "0", "0", now, now
+                        "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, perms, icon, visible, status, menu_location, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "趋势分析", 0, 5, "trend", "Trend", "C", "lottery:trend:list", "trend-charts", "0", "0", "frontend", now, now
                 );
 
                 // --- 号码推荐 ---
                 jdbcTemplate.update(
-                        "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, perms, icon, visible, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        "号码推荐", 0, 6, "recommend", "Recommend", "C", "lottery:recommend:list", "magic-stick", "0", "0", now, now
+                        "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, perms, icon, visible, status, menu_location, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "号码推荐", 0, 6, "recommend", "Recommend", "C", "lottery:recommend:list", "magic-stick", "0", "0", "frontend", now, now
                 );
 
                 log.info("[DataInit] 默认菜单和权限已初始化（共 ~30 条）");
