@@ -6,7 +6,7 @@
     <!-- 根据角色ID列表查询菜单（目录+菜单，不含按钮） -->
     <select id="selectMenusByRoleIds" resultType="com.lottery.entity.Menu">
         SELECT DISTINCT m.menu_id, m.menu_name, m.parent_id, m.order_num,
-               m.path, m.component, m.menu_type, m.perms, m.icon, m.visible, m.status
+               m.path, m.component, m.menu_type, m.perms, m.icon, m.visible, m.status, m.menu_location
         FROM sys_menu m
         INNER JOIN sys_role_menu rm ON m.menu_id = rm.menu_id
         WHERE rm.role_id IN
@@ -34,7 +34,7 @@
     <!-- 查询所有正常状态的菜单 -->
     <select id="selectMenuTreeAll" resultType="com.lottery.entity.Menu">
         SELECT menu_id, menu_name, parent_id, order_num,
-               path, component, menu_type, perms, icon, visible, status
+               path, component, menu_type, perms, icon, visible, status, menu_location
         FROM sys_menu
         WHERE status = '0'
         ORDER BY parent_id, order_num
@@ -43,7 +43,7 @@
     <!-- 根据菜单ID列表查询 -->
     <select id="selectByMenuIds" resultType="com.lottery.entity.Menu">
         SELECT menu_id, menu_name, parent_id, order_num,
-               path, component, menu_type, perms, icon, visible, status
+               path, component, menu_type, perms, icon, visible, status, menu_location
         FROM sys_menu
         WHERE menu_id IN
         <foreach collection="menuIds" item="mid" open="(" separator="," close=")">
