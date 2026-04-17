@@ -15,6 +15,7 @@ import type {
 
 const api = axios.create({ baseURL: '/api/lottery', timeout: 30000 })
 const systemApi = axios.create({ baseURL: '/api/system', timeout: 15000 })
+const authApi = axios.create({ baseURL: '/api/auth', timeout: 15000 })
 
 // 懒加载全局状态，避免循环依赖
 function getGlobal() {
@@ -35,28 +36,75 @@ const requestInterceptor = (config: any) => {
 api.interceptors.request.use(requestInterceptor)
 systemApi.interceptors.request.use(requestInterceptor)
 
-// 响应拦截器 — 错误处理 + 401 自动清登录状态
+// ===== Refresh Token 自动续期 =====
+let refreshPromise: Promise<string | null> | null = null
+
+async function tryRefreshToken(): Promise<string | null> {
+  const rt = localStorage.getItem('lottery_refresh_token')
+  if (!rt) return null
+  try {
+    const { data } = await authApi.post('/refresh', { refreshToken: rt })
+    localStorage.setItem('lottery_token', data.token)
+    localStorage.setItem('lottery_refresh_token', data.refreshToken)
+    return data.token
+  } catch {
+    return null
+  }
+}
+
+function getRefreshPromise(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = tryRefreshToken().finally(() => { refreshPromise = null })
+  }
+  return refreshPromise
+}
+
+function clearAndNotify() {
+  localStorage.removeItem('lottery_token')
+  localStorage.removeItem('lottery_refresh_token')
+  localStorage.removeItem('lottery_user')
+  getGlobal().then(g => g.showToast('登录已过期，请重新登录', 'error'))
+}
+
+// 响应拦截器 — 401 自动续期 + 错误 toast
 const responseInterceptorSuccess = (response: any) => {
     if (response.config.timeout !== 0) {
       getGlobal().then(g => g.stopLoading())
     }
     return response
   }
-const responseInterceptorError = (error: any) => {
+const responseInterceptorError = async (error: any) => {
     if (error.config?.timeout !== 0) {
       getGlobal().then(g => g.stopLoading())
     }
 
     const status = error.response?.status
+    const originalConfig = error.config
+
+    // 401：尝试自动刷新 token 后重试
+    if (status === 401 && !originalConfig._retry) {
+      // 跳过登录/注册/刷新接口
+      const url: string = originalConfig.url || ''
+      if (url.includes('/login') || url.includes('/register') || url.includes('/refresh')) {
+        clearAndNotify()
+        return Promise.reject(error)
+      }
+
+      originalConfig._retry = true
+      const newToken = await getRefreshPromise()
+      if (newToken) {
+        originalConfig.headers.Authorization = `Bearer ${newToken}`
+        // 重新发请求（api 或 systemApi 都行，axios 实例会走各自的 baseURL）
+        return axios(originalConfig)
+      }
+      clearAndNotify()
+      return Promise.reject(error)
+    }
+
     const data = error.response?.data
     const message = data?.error || data?.message || error.message
 
-    if (status === 401) {
-      localStorage.removeItem('lottery_token')
-      localStorage.removeItem('lottery_refresh_token')
-      localStorage.removeItem('lottery_user')
-      getGlobal().then(g => g.showToast('登录已过期，请重新登录', 'error'))
-    } else if (status === 403) {
+    if (status === 403) {
       getGlobal().then(g => g.showToast('权限不足，需要管理员权限', 'error'))
     } else if (status === 400) {
       getGlobal().then(g => g.showToast(message || '请求参数错误', 'warning'))
@@ -84,7 +132,6 @@ function withParams(params: Record<string, unknown>): Record<string, unknown> {
 }
 
 // ========== 认证 API ==========
-const authApi = axios.create({ baseURL: '/api/auth', timeout: 15000 })
 
 export default {
   // ===== 认证 =====
@@ -99,13 +146,37 @@ export default {
   }),
   authConfig: () => authApi.get('/config'),
 
-  // ===== 管理员 =====
+  // ===== 管理员 - 用户 =====
   listUsers: (limit = 20, offset = 0): Promise<AxiosResponse<{ data: any[]; total: number }>> =>
     systemApi.get('/users', { params: { limit, offset } }),
+  addUser: (body: Record<string, unknown>) =>
+    systemApi.post('/users', body),
   updateUser: (id: number, body: Record<string, unknown>) =>
     systemApi.put(`/users/${id}`, body),
-  listRoles: (): Promise<AxiosResponse<{ data: Array<{ roleId: number; roleName: string; roleKey: string }> }>> =>
+  deleteUser: (id: number) =>
+    systemApi.delete(`/users/${id}`),
+
+  // ===== 管理员 - 角色 =====
+  listRoles: (): Promise<AxiosResponse<{ data: Array<{ roleId: number; roleName: string; roleKey: string; menuIds: number[] }> }>> =>
     systemApi.get('/roles'),
+  addRole: (body: Record<string, unknown>) =>
+    systemApi.post('/roles', body),
+  updateRole: (id: number, body: Record<string, unknown>) =>
+    systemApi.put(`/roles/${id}`, body),
+  deleteRole: (id: number) =>
+    systemApi.delete(`/roles/${id}`),
+  getRoleMenus: (roleId: number) =>
+    systemApi.get(`/menus/role/${roleId}`),
+
+  // ===== 管理员 - 菜单 =====
+  listMenus: (params: Record<string, unknown> = {}): Promise<AxiosResponse<{ data: any[] }>> =>
+    systemApi.get('/menus', { params: withParams(params) }),
+  addMenu: (body: Record<string, unknown>) =>
+    systemApi.post('/menus', body),
+  updateMenu: (id: number, body: Record<string, unknown>) =>
+    systemApi.put(`/menus/${id}`, body),
+  deleteMenu: (id: number) =>
+    systemApi.delete(`/menus/${id}`),
 
   // ===== 状态 =====
   status: (): Promise<AxiosResponse<LotteryStatus>> => api.get('/status'),

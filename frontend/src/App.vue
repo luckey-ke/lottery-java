@@ -39,6 +39,12 @@
             <router-link to="/users" class="nav-item" active-class="active">
               <span class="nav-icon">👥</span> 用户
             </router-link>
+            <router-link to="/roles" class="nav-item" active-class="active">
+              <span class="nav-icon">🛡️</span> 角色
+            </router-link>
+            <router-link to="/menus" class="nav-item" active-class="active">
+              <span class="nav-icon">📂</span> 菜单
+            </router-link>
           </template>
         </nav>
 

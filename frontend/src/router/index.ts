@@ -13,6 +13,8 @@ const adminRoutes: RouteRecordRaw[] = [
   { path: '/admin', name: 'Admin', component: () => import('../views/Admin.vue'), meta: { requiresAdmin: true } },
   { path: '/history', name: 'FetchHistory', component: () => import('../views/FetchHistory.vue'), meta: { requiresAdmin: true } },
   { path: '/users', name: 'Users', component: () => import('../views/Users.vue'), meta: { requiresAdmin: true } },
+  { path: '/roles', name: 'Roles', component: () => import('../views/Roles.vue'), meta: { requiresAdmin: true } },
+  { path: '/menus', name: 'Menus', component: () => import('../views/Menus.vue'), meta: { requiresAdmin: true } },
 ]
 
 // 认证页面
