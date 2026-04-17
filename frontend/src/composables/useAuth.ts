@@ -68,6 +68,20 @@ function logout() {
   clearAuth()
 }
 
+/** 从后端刷新当前用户信息（角色、权限等），保持本地数据同步 */
+async function fetchUser() {
+  if (!token.value) return
+  try {
+    const { data } = await api.me()
+    if (data?.user) {
+      user.value = data.user
+      localStorage.setItem(USER_KEY, JSON.stringify(data.user))
+    }
+  } catch {
+    // token 无效等 — 由拦截器处理 401 清理
+  }
+}
+
 export function useAuth() {
   return {
     token: readonly(token),
@@ -78,6 +92,7 @@ export function useAuth() {
     register,
     refresh,
     logout,
+    fetchUser,
     saveAuth,
     clearAuth,
   }

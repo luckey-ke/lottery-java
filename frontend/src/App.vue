@@ -74,14 +74,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGlobal } from './composables/useGlobal'
 import { useAuth } from './composables/useAuth'
 
 const router = useRouter()
 const { message, messageType, isLoading, dismissToast } = useGlobal()
-const { isLoggedIn, isAdmin, user, logout } = useAuth()
+const { isLoggedIn, isAdmin, user, logout, fetchUser } = useAuth()
+
+// 应用启动时从后端同步用户信息
+onMounted(() => { fetchUser() })
 
 const toastIcon = computed(() => {
   switch (messageType.value) {
