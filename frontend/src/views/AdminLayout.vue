@@ -14,25 +14,15 @@
       <div class="sidebar-label" v-if="!sidebarCollapsed">后台管理</div>
 
       <nav class="sidebar-nav">
-        <router-link to="/admin" class="sidebar-item" active-class="active" :exact="true">
-          <span class="sidebar-icon">⚙️</span>
-          <span class="sidebar-text" v-if="!sidebarCollapsed">管理</span>
-        </router-link>
-        <router-link to="/admin/history" class="sidebar-item" active-class="active">
-          <span class="sidebar-icon">📋</span>
-          <span class="sidebar-text" v-if="!sidebarCollapsed">历史</span>
-        </router-link>
-        <router-link to="/admin/user" class="sidebar-item" active-class="active">
-          <span class="sidebar-icon">👥</span>
-          <span class="sidebar-text" v-if="!sidebarCollapsed">用户</span>
-        </router-link>
-        <router-link to="/admin/role" class="sidebar-item" active-class="active">
-          <span class="sidebar-icon">🛡️</span>
-          <span class="sidebar-text" v-if="!sidebarCollapsed">角色</span>
-        </router-link>
-        <router-link to="/admin/menu" class="sidebar-item" active-class="active">
-          <span class="sidebar-icon">📂</span>
-          <span class="sidebar-text" v-if="!sidebarCollapsed">菜单</span>
+        <router-link
+          v-for="item in adminMenus"
+          :key="item.menuId"
+          :to="item.path ? '/admin/' + item.path : '/admin'"
+          class="sidebar-item"
+          active-class="active"
+        >
+          <span class="sidebar-icon">{{ item.icon || '📄' }}</span>
+          <span class="sidebar-text" v-if="!sidebarCollapsed">{{ item.menuName }}</span>
         </router-link>
       </nav>
 
@@ -61,26 +51,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
+import api from '../api'
 
 const { user, isAdmin } = useAuth()
 const route = useRoute()
 const sidebarCollapsed = ref(false)
 
-const menuMap: Record<string, { icon: string; label: string }> = {
-  '': { icon: '⚙️', label: '管理' },
-  history: { icon: '📋', label: '历史' },
-  user: { icon: '👥', label: '用户' },
-  role: { icon: '🛡️', label: '角色' },
-  menu: { icon: '📂', label: '菜单' },
+const adminMenus = ref<Array<{ menuId: number; menuName: string; icon: string; path: string }>>([])
+
+async function loadAdminMenus() {
+  try {
+    const { data } = await api.getMenusByLocation('admin')
+    adminMenus.value = data.data || []
+  } catch { adminMenus.value = [] }
 }
+
+onMounted(loadAdminMenus)
 
 const currentTitle = computed(() => {
   const path = route.path.replace('/admin/', '').replace('/admin', '')
-  const m = menuMap[path]
-  return m ? `${m.icon} ${m.label}` : '后台管理'
+  const item = adminMenus.value.find(i => i.path === path)
+  return item ? `${item.icon || '📄'} ${item.menuName}` : '后台管理'
 })
 </script>
 

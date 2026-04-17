@@ -391,18 +391,56 @@ public class SchemaMigrationRunner {
 
     private void migrateMenuLocations() {
         try {
-            // 将前台页面菜单设为 frontend（根据 path 匹配）
+            // 1. 前台页面设为 frontend
             String[] frontendPaths = {"dashboard", "analysis", "trend", "recommend"};
             for (String p : frontendPaths) {
                 jdbcTemplate.update(
-                        "UPDATE sys_menu SET menu_location = 'frontend' WHERE path = ? AND menu_location IS NULL",
+                        "UPDATE sys_menu SET menu_location = 'frontend' WHERE path = ? AND (menu_location IS NULL OR menu_location = 'admin')",
                         p
                 );
             }
-            // 修正拉取历史的 path
+
+            // 2. 修正拉取历史的 path
             jdbcTemplate.update(
                     "UPDATE sys_menu SET path = 'history' WHERE menu_name = '拉取历史' AND path = 'fetch-history'"
             );
+
+            // 3. 确保 admin 位置的菜单存在（如果还没有的话）
+            int adminMenuCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(1) FROM sys_menu WHERE menu_location = 'admin' AND menu_type = 'C'",
+                    Integer.class
+            );
+            if (adminMenuCount == 0) {
+                String now = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                // 创建后台菜单项
+                String[][] adminMenus = {
+                    {"管理后台", "", "Admin", "C", "1", "setting"},
+                    {"拉取历史", "history", "FetchHistory", "C", "2", "list"},
+                    {"用户管理", "user", "Users", "C", "3", "user"},
+                    {"角色管理", "role", "Roles", "C", "4", "peoples"},
+                    {"菜单管理", "menu", "Menus", "C", "5", "tree-table"},
+                };
+                for (String[] m : adminMenus) {
+                    jdbcTemplate.update(
+                            "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, icon, visible, status, menu_location, created_at, updated_at) VALUES (?, 0, ?, ?, ?, ?, ?, '0', '0', 'admin', ?, ?)",
+                            m[0], Integer.parseInt(m[3]), m[1], m[2], m[4], m[5], now, now
+                    );
+                }
+                // 关联到管理员角色
+                Integer adminRoleId = jdbcTemplate.queryForObject("SELECT role_id FROM sys_role WHERE role_key = 'admin'", Integer.class);
+                if (adminRoleId != null) {
+                    List<Integer> newMenuIds = jdbcTemplate.queryForList(
+                            "SELECT menu_id FROM sys_menu WHERE menu_location = 'admin' AND menu_type = 'C' AND parent_id = 0 ORDER BY menu_id DESC LIMIT 5",
+                            Integer.class
+                    );
+                    for (Integer mid : newMenuIds) {
+                        try {
+                            jdbcTemplate.update("INSERT INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)", adminRoleId, mid);
+                        } catch (Exception ignored) {}
+                    }
+                }
+            }
+
             log.info("[SchemaMigration] menu_location 数据迁移完成");
         } catch (Exception e) {
             log.debug("[SchemaMigration] menu_location 迁移跳过: {}", e.getMessage());
