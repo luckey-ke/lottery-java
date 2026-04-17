@@ -9,7 +9,7 @@ interface UserInfo {
   id: number
   username: string
   nickname: string
-  role: string
+  roles: string[]
 }
 
 const token = ref<string | null>(localStorage.getItem(TOKEN_KEY))
@@ -17,7 +17,7 @@ const refreshToken = ref<string | null>(localStorage.getItem(REFRESH_KEY))
 const user = ref<UserInfo | null>(JSON.parse(localStorage.getItem(USER_KEY) || 'null'))
 
 const isLoggedIn = computed(() => !!token.value)
-const isAdmin = computed(() => user.value?.role === 'ADMIN')
+const isAdmin = computed(() => (user.value?.roles ?? []).some(r => r.toLowerCase() === 'admin'))
 
 function saveAuth(tk: string, rtk: string, u: UserInfo) {
   token.value = tk

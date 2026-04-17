@@ -33,7 +33,7 @@ router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('lottery_token')
   const user = JSON.parse(localStorage.getItem('lottery_user') || 'null')
   const isLoggedIn = !!token
-  const isAdmin = user?.role === 'ADMIN'
+  const isAdmin = (user?.roles ?? []).some((r: string) => r.toLowerCase() === 'admin')
 
   // 需要管理员权限的页面
   if (to.meta.requiresAdmin) {
