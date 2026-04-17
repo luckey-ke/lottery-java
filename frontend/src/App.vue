@@ -13,9 +13,6 @@
           <span class="brand-text">Lottery<span class="brand-accent">Lab</span></span>
         </div>
         <nav class="nav">
-          <router-link to="/" class="nav-item" active-class="active">
-            <span class="nav-icon">📊</span> 总览
-          </router-link>
           <router-link
             v-for="m in frontendMenus"
             :key="m.menuId"

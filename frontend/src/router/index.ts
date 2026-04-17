@@ -2,7 +2,8 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 // 公开页面 — 所有人可访问
 const publicRoutes: RouteRecordRaw[] = [
-  { path: '/', name: 'Dashboard', component: () => import('../views/Dashboard.vue') },
+  { path: '/', name: 'Home', redirect: '/dashboard' },
+  { path: '/dashboard', name: 'Dashboard', component: () => import('../views/Dashboard.vue') },
   { path: '/analysis', name: 'Analysis', component: () => import('../views/Analysis.vue') },
   { path: '/trend', name: 'Trend', component: () => import('../views/Trend.vue') },
   { path: '/recommend', name: 'Recommend', component: () => import('../views/Recommend.vue') },
