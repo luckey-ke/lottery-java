@@ -215,8 +215,12 @@ public class AuthController {
 
     private void collectMenus(List<Menu> tree, String target, List<Map<String, Object>> out) {
         for (Menu m : tree) {
-            if (Menu.TYPE_BUTTON.equals(m.getMenuType()) || Menu.TYPE_DIR.equals(m.getMenuType())) continue;
-            if (target.equals(m.getMenuLocation())) {
+            // 跳过按钮类型
+            if (Menu.TYPE_BUTTON.equals(m.getMenuType())) {
+                continue;
+            }
+            // 收集菜单类型（C）且位置匹配的项，跳过目录类型（M）
+            if (Menu.TYPE_MENU.equals(m.getMenuType()) && target.equals(m.getMenuLocation())) {
                 Map<String, Object> map = new LinkedHashMap<>();
                 map.put("menuId", m.getMenuId());
                 map.put("menuName", m.getMenuName());
@@ -225,6 +229,7 @@ public class AuthController {
                 map.put("orderNum", m.getOrderNum());
                 out.add(map);
             }
+            // 始终递归子菜单（关键：目录下的子菜单也要收集）
             if (m.getChildren() != null && !m.getChildren().isEmpty()) {
                 collectMenus(m.getChildren(), target, out);
             }

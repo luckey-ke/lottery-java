@@ -441,6 +441,12 @@ public class SchemaMigrationRunner {
                 }
             }
 
+            // 4. 修复"数据管理"：应为目录类型(M)而非菜单类型(C)
+            //    容器节点不应出现在侧栏导航中，其子菜单通过递归收集
+            jdbcTemplate.update(
+                    "UPDATE sys_menu SET menu_type = 'M' WHERE menu_name = '数据管理' AND menu_type = 'C'"
+            );
+
             log.info("[SchemaMigration] menu_location 数据迁移完成");
         } catch (Exception e) {
             log.debug("[SchemaMigration] menu_location 迁移跳过: {}", e.getMessage());
