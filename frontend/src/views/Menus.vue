@@ -58,38 +58,40 @@
                 </td>
               </tr>
               <template v-if="m.children?.length">
-                <tr v-for="c in m.children" :key="c.menuId">
-                  <td class="name-cell indent-1">
-                    <span class="tree-icon">{{ c.menuType === 'M' ? '📁' : c.menuType === 'F' ? '🔘' : '📋' }}</span>
-                    {{ c.menuName }}
-                  </td>
-                  <td><span class="type-tag" :class="c.menuType">{{ typeLabel(c.menuType) }}</span></td>
-                  <td class="mono text-muted">{{ c.perms || c.path || '-' }}</td>
-                  <td>{{ c.icon || '-' }}</td>
-                  <td>{{ c.orderNum }}</td>
-                  <td><span :class="['status-dot', c.status === '0' ? 'active' : 'disabled']">{{ c.status === '0' ? '正常' : '停用' }}</span></td>
-                  <td class="actions-cell">
-                    <button class="btn-xs btn-accent" @click="openAdd(c)" v-if="c.menuType !== 'F'">添加子项</button>
-                    <button class="btn-xs" @click="openEdit(c)">编辑</button>
-                    <button class="btn-xs btn-danger" @click="confirmDelete(c)">删除</button>
-                  </td>
-                </tr>
-                <template v-if="c.children?.length">
-                  <tr v-for="b in c.children" :key="b.menuId">
-                    <td class="name-cell indent-2">
-                      <span class="tree-icon">🔘</span>
-                      {{ b.menuName }}
+                <template v-for="c in m.children" :key="c.menuId">
+                  <tr>
+                    <td class="name-cell indent-1">
+                      <span class="tree-icon">{{ c.menuType === 'M' ? '📁' : c.menuType === 'F' ? '🔘' : '📋' }}</span>
+                      {{ c.menuName }}
                     </td>
-                    <td><span class="type-tag F">{{ typeLabel(b.menuType) }}</span></td>
-                    <td class="mono text-muted">{{ b.perms || '-' }}</td>
-                    <td>-</td>
-                    <td>{{ b.orderNum }}</td>
-                    <td><span :class="['status-dot', b.status === '0' ? 'active' : 'disabled']">{{ b.status === '0' ? '正常' : '停用' }}</span></td>
+                    <td><span class="type-tag" :class="c.menuType">{{ typeLabel(c.menuType) }}</span></td>
+                    <td class="mono text-muted">{{ c.perms || c.path || '-' }}</td>
+                    <td>{{ c.icon || '-' }}</td>
+                    <td>{{ c.orderNum }}</td>
+                    <td><span :class="['status-dot', c.status === '0' ? 'active' : 'disabled']">{{ c.status === '0' ? '正常' : '停用' }}</span></td>
                     <td class="actions-cell">
-                      <button class="btn-xs" @click="openEdit(b)">编辑</button>
-                      <button class="btn-xs btn-danger" @click="confirmDelete(b)">删除</button>
+                      <button class="btn-xs btn-accent" @click="openAdd(c)" v-if="c.menuType !== 'F'">添加子项</button>
+                      <button class="btn-xs" @click="openEdit(c)">编辑</button>
+                      <button class="btn-xs btn-danger" @click="confirmDelete(c)">删除</button>
                     </td>
                   </tr>
+                  <template v-if="c.children?.length">
+                    <tr v-for="b in c.children" :key="b.menuId">
+                      <td class="name-cell indent-2">
+                        <span class="tree-icon">🔘</span>
+                        {{ b.menuName }}
+                      </td>
+                      <td><span class="type-tag F">{{ typeLabel(b.menuType) }}</span></td>
+                      <td class="mono text-muted">{{ b.perms || '-' }}</td>
+                      <td>-</td>
+                      <td>{{ b.orderNum }}</td>
+                      <td><span :class="['status-dot', b.status === '0' ? 'active' : 'disabled']">{{ b.status === '0' ? '正常' : '停用' }}</span></td>
+                      <td class="actions-cell">
+                        <button class="btn-xs" @click="openEdit(b)">编辑</button>
+                        <button class="btn-xs btn-danger" @click="confirmDelete(b)">删除</button>
+                      </td>
+                    </tr>
+                  </template>
                 </template>
               </template>
             </template>
