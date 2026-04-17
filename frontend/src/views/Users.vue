@@ -33,8 +33,8 @@
               <td class="font-medium">{{ u.username }}</td>
               <td>{{ u.nickname || '-' }}</td>
               <td>
-                <span class="role-badge" :class="u.role === 'ADMIN' ? 'role-admin' : 'role-user'">
-                  {{ u.role === 'ADMIN' ? '👑 管理员' : '👤 普通用户' }}
+                <span class="role-badge" :class="isAdminUser(u) ? 'role-admin' : 'role-user'">
+                  {{ isAdminUser(u) ? '👑 管理员' : '👤 普通用户' }}
                 </span>
               </td>
               <td class="text-muted">{{ u.createdAt || '-' }}</td>
@@ -42,11 +42,11 @@
                 <button
                   v-if="u.username !== currentUser"
                   class="btn-role"
-                  :class="u.role === 'ADMIN' ? 'btn-demote' : 'btn-promote'"
+                  :class="isAdminUser(u) ? 'btn-demote' : 'btn-promote'"
                   @click="toggleRole(u)"
                   :disabled="updating === u.id"
                 >
-                  {{ u.role === 'ADMIN' ? '降为用户' : '提升为管理员' }}
+                  {{ isAdminUser(u) ? '降为用户' : '提升为管理员' }}
                 </button>
                 <span v-else class="text-muted text-sm">当前用户</span>
               </td>
@@ -75,7 +75,8 @@ interface UserInfo {
   id: number
   username: string
   nickname: string
-  role: string
+  roles: string[]
+  roleIds: number[]
   createdAt: string
 }
 
@@ -89,6 +90,10 @@ const pageSize = 20
 const updating = ref<number | null>(null)
 const currentUser = user.value?.username
 
+function isAdminUser(u: UserInfo): boolean {
+  return (u.roles ?? []).some(r => r.toLowerCase() === 'admin')
+}
+
 async function loadUsers() {
   try {
     const { data } = await api.listUsers(pageSize, offset.value)
@@ -98,12 +103,24 @@ async function loadUsers() {
 }
 
 async function toggleRole(u: UserInfo) {
-  const newRole = u.role === 'ADMIN' ? 'USER' : 'ADMIN'
+  const wasAdmin = isAdminUser(u)
   updating.value = u.id
   try {
-    await api.updateUserRole(u.id, newRole)
-    u.role = newRole
-    showToast(`已将 ${u.username} 的角色更新为 ${newRole === 'ADMIN' ? '管理员' : '普通用户'}`, 'success')
+    // 获取角色列表，找到 admin / user 的 roleId
+    const { data: rolesData } = await api.listRoles()
+    const adminRoleId = rolesData.data.find(r => r.roleKey === 'admin')?.roleId
+    const userRoleId = rolesData.data.find(r => r.roleKey === 'user')?.roleId
+    const newRoleIds = wasAdmin
+      ? (userRoleId ? [userRoleId] : [])
+      : (adminRoleId ? [adminRoleId] : u.roleIds)
+
+    await api.updateUser(u.id, { roleIds: newRoleIds })
+    // 本地更新
+    const roleName = wasAdmin ? 'user' : 'admin'
+    u.roles = [roleName]
+    u.roleIds = newRoleIds
+    const label = wasAdmin ? '普通用户' : '管理员'
+    showToast(`已将 ${u.username} 的角色更新为 ${label}`, 'success')
   } catch { /* handled by interceptor */ }
   finally { updating.value = null }
 }

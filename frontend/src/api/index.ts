@@ -14,6 +14,7 @@ import type {
 } from './types'
 
 const api = axios.create({ baseURL: '/api/lottery', timeout: 30000 })
+const systemApi = axios.create({ baseURL: '/api/system', timeout: 15000 })
 
 // 懒加载全局状态，避免循环依赖
 function getGlobal() {
@@ -21,7 +22,7 @@ function getGlobal() {
 }
 
 // 请求拦截器 — 附带 JWT Token + Loading
-api.interceptors.request.use((config) => {
+const requestInterceptor = (config: any) => {
   const token = localStorage.getItem('lottery_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -30,17 +31,18 @@ api.interceptors.request.use((config) => {
     getGlobal().then(g => g.startLoading())
   }
   return config
-})
+}
+api.interceptors.request.use(requestInterceptor)
+systemApi.interceptors.request.use(requestInterceptor)
 
 // 响应拦截器 — 错误处理 + 401 自动清登录状态
-api.interceptors.response.use(
-  (response) => {
+const responseInterceptorSuccess = (response: any) => {
     if (response.config.timeout !== 0) {
       getGlobal().then(g => g.stopLoading())
     }
     return response
-  },
-  (error) => {
+  }
+const responseInterceptorError = (error: any) => {
     if (error.config?.timeout !== 0) {
       getGlobal().then(g => g.stopLoading())
     }
@@ -50,7 +52,6 @@ api.interceptors.response.use(
     const message = data?.error || data?.message || error.message
 
     if (status === 401) {
-      // Token 过期或无效，清除登录状态
       localStorage.removeItem('lottery_token')
       localStorage.removeItem('lottery_refresh_token')
       localStorage.removeItem('lottery_user')
@@ -73,7 +74,8 @@ api.interceptors.response.use(
 
     return Promise.reject(error)
   }
-)
+api.interceptors.response.use(responseInterceptorSuccess, responseInterceptorError)
+systemApi.interceptors.response.use(responseInterceptorSuccess, responseInterceptorError)
 
 function withParams(params: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
@@ -99,9 +101,11 @@ export default {
 
   // ===== 管理员 =====
   listUsers: (limit = 20, offset = 0): Promise<AxiosResponse<{ data: any[]; total: number }>> =>
-    api.get('/auth/users', { params: { limit, offset } }),
-  updateUserRole: (id: number, role: string) =>
-    api.put(`/auth/users/${id}/role`, { role }),
+    systemApi.get('/users', { params: { limit, offset } }),
+  updateUser: (id: number, body: Record<string, unknown>) =>
+    systemApi.put(`/users/${id}`, body),
+  listRoles: (): Promise<AxiosResponse<{ data: Array<{ roleId: number; roleName: string; roleKey: string }> }>> =>
+    systemApi.get('/roles'),
 
   // ===== 状态 =====
   status: (): Promise<AxiosResponse<LotteryStatus>> => api.get('/status'),
