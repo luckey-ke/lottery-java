@@ -30,54 +30,30 @@
             <tr v-for="u in users" :key="u.id">
               <td class="text-muted">{{ u.id }}</td>
               <td class="font-medium">{{ u.username }}</td>
+              <td>{{ u.nickname || '-' }}</td>
               <td>
-                {{ u.nickname || '-' }}
-                <button v-if="u.username !== currentUser" class="btn-xs btn-outline" @click="openNicknameEdit(u)" title="修改昵称">✏️</button>
-              </td>
-              <td>
-                <select
-                  v-if="u.username !== currentUser"
-                  class="role-select"
-                  :class="isAdminUser(u) ? 'role-admin' : 'role-user'"
-                  :value="u.roleIds[0] ?? ''"
-                  @change="onRoleChange(u, ($event.target as HTMLSelectElement).value)"
-                  :disabled="updating === u.id"
-                >
-                  <option v-for="r in allRoles" :key="r.roleId" :value="r.roleId">{{ r.roleName }}</option>
-                </select>
-                <span v-else class="role-badge" :class="isAdminUser(u) ? 'role-admin' : 'role-user'">
+                <span class="role-badge" :class="isAdminUser(u) ? 'role-admin' : 'role-user'">
                   {{ isAdminUser(u) ? '👑 管理员' : '👤 普通用户' }}
                 </span>
               </td>
               <td>
-                <button
-                  v-if="u.username !== currentUser"
-                  class="btn-xs"
-                  :class="u.status === '0' ? 'btn-outline' : 'btn-accent'"
-                  @click="toggleStatus(u)"
-                  :disabled="updating === u.id"
-                >
-                  {{ u.status === '0' ? '🟢 正常 → 停用' : '🔴 停用 → 启用' }}
-                </button>
-                <span v-else :class="['status-dot', u.status === '0' ? 'active' : 'disabled']">
-                  {{ u.status === '0' ? '正常' : '停用' }}
+                <span :class="['status-dot', u.status === '0' ? 'active' : 'disabled']">
+                  {{ u.status === '0' ? '🟢 正常' : '🔴 停用' }}
                 </span>
               </td>
               <td class="text-muted">{{ u.createdAt || '-' }}</td>
               <td class="actions-cell">
                 <button
-                  v-if="u.username !== currentUser"
-                  class="btn-xs btn-warn"
-                  @click="openResetPassword(u)"
+                  class="btn-xs btn-edit"
+                  @click="openEditDialog(u)"
                   :disabled="updating === u.id"
-                >🔑 改密</button>
+                >✏️ 修改</button>
                 <button
                   v-if="u.username !== currentUser"
                   class="btn-xs btn-danger"
                   @click="confirmDelete(u)"
                   :disabled="updating === u.id"
                 >删除</button>
-                <span v-if="u.username === currentUser" class="text-muted text-sm">当前用户</span>
               </td>
             </tr>
           </tbody>
@@ -138,48 +114,50 @@
       </div>
     </Transition>
 
-    <!-- 修改昵称弹窗 -->
+    <!-- 统一修改用户弹窗 -->
     <Transition name="modal">
-      <div v-if="nicknameTarget" class="modal-overlay" @click.self="nicknameTarget = null">
-        <div class="modal-card modal-sm">
+      <div v-if="editTarget" class="modal-overlay" @click.self="editTarget = null">
+        <div class="modal-card">
           <div class="modal-header">
-            <h3>✏️ 修改昵称</h3>
-            <button class="modal-close" @click="nicknameTarget = null">✕</button>
+            <h3>✏️ 修改用户信息</h3>
+            <button class="modal-close" @click="editTarget = null">✕</button>
           </div>
-          <form class="modal-body" @submit.prevent="handleNicknameUpdate">
-            <p class="form-hint">用户：<b>{{ nicknameTarget.username }}</b></p>
+          <form class="modal-body" @submit.prevent="handleEdit">
             <div class="form-field">
-              <label>新昵称 <span class="req">*</span></label>
-              <input v-model="nicknameValue" class="input" required placeholder="输入新昵称" />
+              <label>用户名 <span class="req">*</span></label>
+              <input v-model="editForm.username" class="input" required minlength="3" maxlength="32" />
             </div>
-            <div v-if="nicknameError" class="form-error">{{ nicknameError }}</div>
+            <div class="form-field">
+              <label>昵称</label>
+              <input v-model="editForm.nickname" class="input" placeholder="用户昵称" />
+            </div>
+            <div class="form-field">
+              <label>角色</label>
+              <select v-model="editForm.roleId" class="input">
+                <option v-for="r in allRoles" :key="r.roleId" :value="r.roleId">{{ r.roleName }}</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>状态</label>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input type="radio" value="0" v-model="editForm.status" />
+                  <span class="status-active">🟢 正常</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" value="1" v-model="editForm.status" />
+                  <span class="status-disabled">🔴 停用</span>
+                </label>
+              </div>
+            </div>
+            <div class="form-field">
+              <label>修改密码</label>
+              <input v-model="editForm.password" type="password" class="input" placeholder="留空则不修改，修改至少 6 位" minlength="6" />
+            </div>
+            <div v-if="editError" class="form-error">{{ editError }}</div>
             <div class="modal-footer">
-              <button type="button" class="btn-cancel" @click="nicknameTarget = null">取消</button>
+              <button type="button" class="btn-cancel" @click="editTarget = null">取消</button>
               <button type="submit" class="btn-confirm" :disabled="saving">保存</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </Transition>
-
-    <!-- 重置密码弹窗 -->
-    <Transition name="modal">
-      <div v-if="resetPwdTarget" class="modal-overlay" @click.self="resetPwdTarget = null">
-        <div class="modal-card modal-sm">
-          <div class="modal-header">
-            <h3>🔑 强制修改密码</h3>
-            <button class="modal-close" @click="resetPwdTarget = null">✕</button>
-          </div>
-          <form class="modal-body" @submit.prevent="handleResetPassword">
-            <p class="form-hint">用户：<b>{{ resetPwdTarget.username }}</b></p>
-            <div class="form-field">
-              <label>新密码 <span class="req">*</span></label>
-              <input v-model="resetPwdValue" type="password" class="input" required minlength="6" placeholder="至少 6 位" />
-            </div>
-            <div v-if="resetPwdError" class="form-error">{{ resetPwdError }}</div>
-            <div class="modal-footer">
-              <button type="button" class="btn-cancel" @click="resetPwdTarget = null">取消</button>
-              <button type="submit" class="btn-confirm" :disabled="saving">确认修改</button>
             </div>
           </form>
         </div>
@@ -242,15 +220,16 @@ const adding = ref(false)
 const addError = ref('')
 const newUser = reactive({ username: '', nickname: '', password: '', email: '', phone: '', roleIds: [] as number[] })
 
-// 修改昵称
-const nicknameTarget = ref<UserInfo | null>(null)
-const nicknameValue = ref('')
-const nicknameError = ref('')
-
-// 重置密码
-const resetPwdTarget = ref<UserInfo | null>(null)
-const resetPwdValue = ref('')
-const resetPwdError = ref('')
+// 统一修改
+const editTarget = ref<UserInfo | null>(null)
+const editError = ref('')
+const editForm = reactive({
+  username: '',
+  nickname: '',
+  roleId: 0 as number,
+  status: '0',
+  password: '',
+})
 
 // 删除用户
 const deleteTarget = ref<UserInfo | null>(null)
@@ -296,71 +275,51 @@ async function handleAddUser() {
   } finally { adding.value = false }
 }
 
-// 角色下拉切换
-async function onRoleChange(u: UserInfo, roleIdStr: string) {
-  const roleId = Number(roleIdStr)
-  if (!roleId) return
-  updating.value = u.id
-  try {
-    await api.updateUser(u.id, { roleIds: [roleId] })
-    const role = allRoles.value.find(r => r.roleId === roleId)
-    u.roleIds = [roleId]
-    u.roles = role ? [role.roleKey] : u.roles
-    showToast(`已将 ${u.username} 角色切换为 ${role?.roleName || '未知'}`, 'success')
-  } catch { /* interceptor */ }
-  finally { updating.value = null }
+// 打开统一修改弹窗
+function openEditDialog(u: UserInfo) {
+  editTarget.value = u
+  editError.value = ''
+  editForm.username = u.username
+  editForm.nickname = u.nickname || ''
+  editForm.roleId = u.roleIds[0] ?? 0
+  editForm.status = u.status
+  editForm.password = ''
 }
 
-// 状态切换
-async function toggleStatus(u: UserInfo) {
-  const newStatus = u.status === '0' ? '1' : '0'
-  updating.value = u.id
-  try {
-    await api.updateUser(u.id, { status: newStatus })
-    u.status = newStatus
-    showToast(`${u.username} 已${newStatus === '0' ? '启用' : '停用'}`, 'success')
-  } catch { /* interceptor */ }
-  finally { updating.value = null }
-}
-
-// 修改昵称
-function openNicknameEdit(u: UserInfo) {
-  nicknameTarget.value = u
-  nicknameValue.value = u.nickname || ''
-  nicknameError.value = ''
-}
-
-async function handleNicknameUpdate() {
-  if (!nicknameTarget.value) return
+async function handleEdit() {
+  if (!editTarget.value) return
   saving.value = true
-  nicknameError.value = ''
-  try {
-    await api.updateUser(nicknameTarget.value.id, { nickname: nicknameValue.value })
-    nicknameTarget.value.nickname = nicknameValue.value
-    showToast('昵称修改成功', 'success')
-    nicknameTarget.value = null
-  } catch (e: any) {
-    nicknameError.value = e?.response?.data?.error || '修改失败'
-  } finally { saving.value = false }
-}
+  editError.value = ''
 
-// 强制改密
-function openResetPassword(u: UserInfo) {
-  resetPwdTarget.value = u
-  resetPwdValue.value = ''
-  resetPwdError.value = ''
-}
+  const body: Record<string, unknown> = {
+    username: editForm.username,
+    nickname: editForm.nickname,
+    status: editForm.status,
+  }
 
-async function handleResetPassword() {
-  if (!resetPwdTarget.value) return
-  saving.value = true
-  resetPwdError.value = ''
+  if (editForm.roleId) {
+    body.roleIds = [editForm.roleId]
+  }
+  if (editForm.password && editForm.password.length >= 6) {
+    body.password = editForm.password
+  }
+
   try {
-    await api.updateUser(resetPwdTarget.value.id, { password: resetPwdValue.value })
-    showToast(`用户 ${resetPwdTarget.value.username} 密码已重置`, 'success')
-    resetPwdTarget.value = null
+    await api.updateUser(editTarget.value.id, body)
+    // 本地更新
+    const u = editTarget.value
+    u.username = editForm.username
+    u.nickname = editForm.nickname
+    u.status = editForm.status
+    if (editForm.roleId) {
+      u.roleIds = [editForm.roleId]
+      const role = allRoles.value.find(r => r.roleId === editForm.roleId)
+      u.roles = role ? [role.roleKey] : u.roles
+    }
+    showToast('用户信息已更新', 'success')
+    editTarget.value = null
   } catch (e: any) {
-    resetPwdError.value = e?.response?.data?.error || '修改失败'
+    editError.value = e?.response?.data?.error || '修改失败'
   } finally { saving.value = false }
 }
 
@@ -402,12 +361,6 @@ onMounted(() => { loadUsers(); loadRoles() })
 .data-table tr:hover td { background: var(--bg-card-hover); }
 .font-medium { font-weight: 600; }
 .text-muted { color: var(--text-muted); }
-.text-sm { font-size: 12px; }
-
-.role-select { padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; background: var(--bg-card); cursor: pointer; outline: none; font-family: var(--font); }
-.role-select:focus { border-color: var(--accent); }
-.role-select.role-admin { color: var(--accent); border-color: var(--accent); }
-.role-select.role-user { color: var(--text-secondary); }
 
 .role-badge { display: inline-flex; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .role-admin { background: var(--accent-bg); color: var(--accent); }
@@ -418,15 +371,11 @@ onMounted(() => { loadUsers(); loadRoles() })
 
 .actions-cell { display: flex; gap: 6px; }
 .btn-xs { padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; transition: all 0.2s; background: var(--bg-card); font-family: var(--font); white-space: nowrap; }
-.btn-outline { color: var(--text-secondary); }
-.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
-.btn-accent { color: var(--accent); border-color: var(--accent); }
-.btn-accent:hover { background: var(--accent-bg); }
-.btn-warn { color: var(--orange); border-color: var(--orange); }
-.btn-warn:hover { background: var(--orange-bg); }
+.btn-edit { color: var(--accent); border-color: var(--accent); }
+.btn-edit:hover { background: var(--accent-bg); }
 .btn-danger { color: var(--red); border-color: var(--red); }
 .btn-danger:hover { background: var(--red-bg); }
-.btn-xs:disabled, .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-xs:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 16px; border-top: 1px solid var(--border-light); }
 .page-btn { padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 13px; cursor: pointer; transition: all 0.2s; }
@@ -448,12 +397,15 @@ onMounted(() => { loadUsers(); loadRoles() })
 
 .form-field { margin-bottom: 16px; }
 .form-field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-primary); }
-.form-hint { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
 .req { color: var(--red); }
 .input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; outline: none; transition: border-color 0.2s; background: var(--bg); color: var(--text-primary); box-sizing: border-box; }
 .input:focus { border-color: var(--accent); }
 .checkbox-group { display: flex; gap: 16px; flex-wrap: wrap; }
 .checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
+.radio-group { display: flex; gap: 20px; }
+.radio-label { display: flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
+.status-active { color: var(--green); font-weight: 600; }
+.status-disabled { color: var(--red); font-weight: 600; }
 .form-error { padding: 10px 14px; background: var(--red-bg); color: var(--red); border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 16px; }
 .btn-cancel { padding: 10px 20px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-secondary); font-size: 14px; cursor: pointer; font-family: var(--font); }
 .btn-confirm { padding: 10px 20px; border: none; border-radius: var(--radius-sm); background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font); }

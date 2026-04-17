@@ -136,6 +136,15 @@ public class SystemController {
             throw BusinessException.badRequest("用户不存在");
         }
 
+        if (body.containsKey("username")) {
+            String username = (String) body.get("username");
+            if (username != null && !username.isBlank() && !username.equals(user.getUsername())) {
+                if (userMapper.existsByUsername(username) > 0) {
+                    throw BusinessException.badRequest("用户名已存在");
+                }
+                user.setUsername(username);
+            }
+        }
         if (body.containsKey("nickname")) user.setNickname((String) body.get("nickname"));
         if (body.containsKey("email")) user.setEmail((String) body.get("email"));
         if (body.containsKey("phone")) user.setPhone((String) body.get("phone"));
