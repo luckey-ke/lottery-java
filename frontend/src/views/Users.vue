@@ -30,14 +30,36 @@
             <tr v-for="u in users" :key="u.id">
               <td class="text-muted">{{ u.id }}</td>
               <td class="font-medium">{{ u.username }}</td>
-              <td>{{ u.nickname || '-' }}</td>
               <td>
-                <span class="role-badge" :class="isAdminUser(u) ? 'role-admin' : 'role-user'">
+                {{ u.nickname || '-' }}
+                <button v-if="u.username !== currentUser" class="btn-xs btn-outline" @click="openNicknameEdit(u)" title="修改昵称">✏️</button>
+              </td>
+              <td>
+                <select
+                  v-if="u.username !== currentUser"
+                  class="role-select"
+                  :class="isAdminUser(u) ? 'role-admin' : 'role-user'"
+                  :value="u.roleIds[0] ?? ''"
+                  @change="onRoleChange(u, ($event.target as HTMLSelectElement).value)"
+                  :disabled="updating === u.id"
+                >
+                  <option v-for="r in allRoles" :key="r.roleId" :value="r.roleId">{{ r.roleName }}</option>
+                </select>
+                <span v-else class="role-badge" :class="isAdminUser(u) ? 'role-admin' : 'role-user'">
                   {{ isAdminUser(u) ? '👑 管理员' : '👤 普通用户' }}
                 </span>
               </td>
               <td>
-                <span :class="['status-dot', u.status === '0' ? 'active' : 'disabled']">
+                <button
+                  v-if="u.username !== currentUser"
+                  class="btn-xs"
+                  :class="u.status === '0' ? 'btn-outline' : 'btn-accent'"
+                  @click="toggleStatus(u)"
+                  :disabled="updating === u.id"
+                >
+                  {{ u.status === '0' ? '🟢 正常 → 停用' : '🔴 停用 → 启用' }}
+                </button>
+                <span v-else :class="['status-dot', u.status === '0' ? 'active' : 'disabled']">
                   {{ u.status === '0' ? '正常' : '停用' }}
                 </span>
               </td>
@@ -45,18 +67,17 @@
               <td class="actions-cell">
                 <button
                   v-if="u.username !== currentUser"
-                  class="btn-sm"
-                  :class="isAdminUser(u) ? 'btn-warn' : 'btn-accent'"
-                  @click="toggleRole(u)"
+                  class="btn-xs btn-warn"
+                  @click="openResetPassword(u)"
                   :disabled="updating === u.id"
-                >{{ isAdminUser(u) ? '降级' : '升级' }}</button>
+                >🔑 改密</button>
                 <button
                   v-if="u.username !== currentUser"
-                  class="btn-sm btn-danger"
+                  class="btn-xs btn-danger"
                   @click="confirmDelete(u)"
                   :disabled="updating === u.id"
                 >删除</button>
-                <span v-else class="text-muted text-sm">当前用户</span>
+                <span v-if="u.username === currentUser" class="text-muted text-sm">当前用户</span>
               </td>
             </tr>
           </tbody>
@@ -117,6 +138,54 @@
       </div>
     </Transition>
 
+    <!-- 修改昵称弹窗 -->
+    <Transition name="modal">
+      <div v-if="nicknameTarget" class="modal-overlay" @click.self="nicknameTarget = null">
+        <div class="modal-card modal-sm">
+          <div class="modal-header">
+            <h3>✏️ 修改昵称</h3>
+            <button class="modal-close" @click="nicknameTarget = null">✕</button>
+          </div>
+          <form class="modal-body" @submit.prevent="handleNicknameUpdate">
+            <p class="form-hint">用户：<b>{{ nicknameTarget.username }}</b></p>
+            <div class="form-field">
+              <label>新昵称 <span class="req">*</span></label>
+              <input v-model="nicknameValue" class="input" required placeholder="输入新昵称" />
+            </div>
+            <div v-if="nicknameError" class="form-error">{{ nicknameError }}</div>
+            <div class="modal-footer">
+              <button type="button" class="btn-cancel" @click="nicknameTarget = null">取消</button>
+              <button type="submit" class="btn-confirm" :disabled="saving">保存</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 重置密码弹窗 -->
+    <Transition name="modal">
+      <div v-if="resetPwdTarget" class="modal-overlay" @click.self="resetPwdTarget = null">
+        <div class="modal-card modal-sm">
+          <div class="modal-header">
+            <h3>🔑 强制修改密码</h3>
+            <button class="modal-close" @click="resetPwdTarget = null">✕</button>
+          </div>
+          <form class="modal-body" @submit.prevent="handleResetPassword">
+            <p class="form-hint">用户：<b>{{ resetPwdTarget.username }}</b></p>
+            <div class="form-field">
+              <label>新密码 <span class="req">*</span></label>
+              <input v-model="resetPwdValue" type="password" class="input" required minlength="6" placeholder="至少 6 位" />
+            </div>
+            <div v-if="resetPwdError" class="form-error">{{ resetPwdError }}</div>
+            <div class="modal-footer">
+              <button type="button" class="btn-cancel" @click="resetPwdTarget = null">取消</button>
+              <button type="submit" class="btn-confirm" :disabled="saving">确认修改</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Transition>
+
     <!-- 删除确认 -->
     <Transition name="modal">
       <div v-if="deleteTarget" class="modal-overlay" @click.self="deleteTarget = null">
@@ -161,6 +230,7 @@ const total = ref(0)
 const offset = ref(0)
 const pageSize = 20
 const updating = ref<number | null>(null)
+const saving = ref(false)
 const currentUser = user.value?.username
 
 // 角色列表
@@ -171,6 +241,16 @@ const showAddDialog = ref(false)
 const adding = ref(false)
 const addError = ref('')
 const newUser = reactive({ username: '', nickname: '', password: '', email: '', phone: '', roleIds: [] as number[] })
+
+// 修改昵称
+const nicknameTarget = ref<UserInfo | null>(null)
+const nicknameValue = ref('')
+const nicknameError = ref('')
+
+// 重置密码
+const resetPwdTarget = ref<UserInfo | null>(null)
+const resetPwdValue = ref('')
+const resetPwdError = ref('')
 
 // 删除用户
 const deleteTarget = ref<UserInfo | null>(null)
@@ -216,21 +296,72 @@ async function handleAddUser() {
   } finally { adding.value = false }
 }
 
-async function toggleRole(u: UserInfo) {
-  const wasAdmin = isAdminUser(u)
+// 角色下拉切换
+async function onRoleChange(u: UserInfo, roleIdStr: string) {
+  const roleId = Number(roleIdStr)
+  if (!roleId) return
   updating.value = u.id
   try {
-    const adminRoleId = allRoles.value.find(r => r.roleKey === 'admin')?.roleId
-    const userRoleId = allRoles.value.find(r => r.roleKey === 'user')?.roleId
-    const newRoleIds = wasAdmin
-      ? (userRoleId ? [userRoleId] : [])
-      : (adminRoleId ? [adminRoleId] : u.roleIds)
-    await api.updateUser(u.id, { roleIds: newRoleIds })
-    u.roles = [wasAdmin ? 'user' : 'admin']
-    u.roleIds = newRoleIds
-    showToast(`已将 ${u.username} ${wasAdmin ? '降为普通用户' : '提升为管理员'}`, 'success')
+    await api.updateUser(u.id, { roleIds: [roleId] })
+    const role = allRoles.value.find(r => r.roleId === roleId)
+    u.roleIds = [roleId]
+    u.roles = role ? [role.roleKey] : u.roles
+    showToast(`已将 ${u.username} 角色切换为 ${role?.roleName || '未知'}`, 'success')
   } catch { /* interceptor */ }
   finally { updating.value = null }
+}
+
+// 状态切换
+async function toggleStatus(u: UserInfo) {
+  const newStatus = u.status === '0' ? '1' : '0'
+  updating.value = u.id
+  try {
+    await api.updateUser(u.id, { status: newStatus })
+    u.status = newStatus
+    showToast(`${u.username} 已${newStatus === '0' ? '启用' : '停用'}`, 'success')
+  } catch { /* interceptor */ }
+  finally { updating.value = null }
+}
+
+// 修改昵称
+function openNicknameEdit(u: UserInfo) {
+  nicknameTarget.value = u
+  nicknameValue.value = u.nickname || ''
+  nicknameError.value = ''
+}
+
+async function handleNicknameUpdate() {
+  if (!nicknameTarget.value) return
+  saving.value = true
+  nicknameError.value = ''
+  try {
+    await api.updateUser(nicknameTarget.value.id, { nickname: nicknameValue.value })
+    nicknameTarget.value.nickname = nicknameValue.value
+    showToast('昵称修改成功', 'success')
+    nicknameTarget.value = null
+  } catch (e: any) {
+    nicknameError.value = e?.response?.data?.error || '修改失败'
+  } finally { saving.value = false }
+}
+
+// 强制改密
+function openResetPassword(u: UserInfo) {
+  resetPwdTarget.value = u
+  resetPwdValue.value = ''
+  resetPwdError.value = ''
+}
+
+async function handleResetPassword() {
+  if (!resetPwdTarget.value) return
+  saving.value = true
+  resetPwdError.value = ''
+  try {
+    await api.updateUser(resetPwdTarget.value.id, { password: resetPwdValue.value })
+    showToast(`用户 ${resetPwdTarget.value.username} 密码已重置`, 'success')
+    resetPwdTarget.value = null
+  } catch (e: any) {
+    resetPwdError.value = e?.response?.data?.error || '修改失败'
+  } finally { saving.value = false }
 }
 
 function confirmDelete(u: UserInfo) { deleteTarget.value = u }
@@ -266,12 +397,17 @@ onMounted(() => { loadUsers(); loadRoles() })
 .table-scroll { overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .data-table th { padding: 12px 16px; text-align: left; font-weight: 600; color: var(--text-secondary); background: var(--bg); border-bottom: 1px solid var(--border); white-space: nowrap; }
-.data-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-light); }
+.data-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
 .data-table tr:last-child td { border-bottom: none; }
 .data-table tr:hover td { background: var(--bg-card-hover); }
 .font-medium { font-weight: 600; }
 .text-muted { color: var(--text-muted); }
 .text-sm { font-size: 12px; }
+
+.role-select { padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; background: var(--bg-card); cursor: pointer; outline: none; font-family: var(--font); }
+.role-select:focus { border-color: var(--accent); }
+.role-select.role-admin { color: var(--accent); border-color: var(--accent); }
+.role-select.role-user { color: var(--text-secondary); }
 
 .role-badge { display: inline-flex; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .role-admin { background: var(--accent-bg); color: var(--accent); }
@@ -281,14 +417,16 @@ onMounted(() => { loadUsers(); loadRoles() })
 .status-dot.disabled { color: var(--red); }
 
 .actions-cell { display: flex; gap: 6px; }
-.btn-sm { padding: 4px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; transition: all 0.2s; background: var(--bg-card); font-family: var(--font); }
+.btn-xs { padding: 3px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 11px; cursor: pointer; transition: all 0.2s; background: var(--bg-card); font-family: var(--font); white-space: nowrap; }
+.btn-outline { color: var(--text-secondary); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
 .btn-accent { color: var(--accent); border-color: var(--accent); }
 .btn-accent:hover { background: var(--accent-bg); }
 .btn-warn { color: var(--orange); border-color: var(--orange); }
 .btn-warn:hover { background: var(--orange-bg); }
 .btn-danger { color: var(--red); border-color: var(--red); }
 .btn-danger:hover { background: var(--red-bg); }
-.btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-xs:disabled, .btn-sm:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 16px; border-top: 1px solid var(--border-light); }
 .page-btn { padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); color: var(--text-primary); font-size: 13px; cursor: pointer; transition: all 0.2s; }
@@ -310,6 +448,7 @@ onMounted(() => { loadUsers(); loadRoles() })
 
 .form-field { margin-bottom: 16px; }
 .form-field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-primary); }
+.form-hint { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
 .req { color: var(--red); }
 .input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; outline: none; transition: border-color 0.2s; background: var(--bg); color: var(--text-primary); box-sizing: border-box; }
 .input:focus { border-color: var(--accent); }

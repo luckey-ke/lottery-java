@@ -290,10 +290,14 @@ public class SystemController {
             throw BusinessException.badRequest("不能删除管理员角色");
         }
 
+        // 检查是否有用户分配了该角色
+        int userCount = userRoleMapper.countUsersByRoleId(id);
+        if (userCount > 0) {
+            throw BusinessException.badRequest("该角色下还有 " + userCount + " 个用户，不能删除");
+        }
+
         roleMapper.deleteById(id);
         roleMenuMapper.deleteByRoleId(id);
-        // 同时删除用户角色关联
-        userRoleMapper.deleteByRoleId(id);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("message", "角色已删除");

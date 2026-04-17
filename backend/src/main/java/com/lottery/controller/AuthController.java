@@ -193,6 +193,62 @@ public class AuthController {
         return result;
     }
 
+    /** 修改个人资料（昵称） */
+    @PutMapping("/profile")
+    public Map<String, Object> updateProfile(@RequestBody Map<String, Object> body) {
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userMapper.findByUsername(currentUsername);
+        if (user == null) throw new BusinessException(401, "用户不存在");
+
+        if (body.containsKey("nickname")) {
+            String nickname = (String) body.get("nickname");
+            if (nickname == null || nickname.isBlank()) {
+                throw BusinessException.badRequest("昵称不能为空");
+            }
+            user.setNickname(nickname);
+        }
+        user.setUpdatedAt(LocalDateTime.now().format(TS_FMT));
+        userMapper.updateById(user);
+
+        List<Role> roles = permissionService.getRoles(user.getId());
+        List<String> roleKeys = roles.stream().map(Role::getRoleKey).collect(Collectors.toList());
+        Set<String> perms = permissionService.getPermissions(user.getId());
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("message", "资料更新成功");
+        result.put("user", userInfo(user, roleKeys, perms));
+        return result;
+    }
+
+    /** 修改密码 */
+    @PutMapping("/password")
+    public Map<String, Object> changePassword(@RequestBody Map<String, String> body) {
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userMapper.findByUsername(currentUsername);
+        if (user == null) throw new BusinessException(401, "用户不存在");
+
+        String oldPassword = body.get("oldPassword");
+        String newPassword = body.get("newPassword");
+
+        if (oldPassword == null || oldPassword.isBlank()) {
+            throw BusinessException.badRequest("当前密码不能为空");
+        }
+        if (newPassword == null || newPassword.isBlank() || newPassword.length() < 6) {
+            throw BusinessException.badRequest("新密码长度不能少于 6 位");
+        }
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            throw BusinessException.badRequest("当前密码错误");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setUpdatedAt(LocalDateTime.now().format(TS_FMT));
+        userMapper.updateById(user);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("message", "密码修改成功");
+        return result;
+    }
+
     // ===== 内部方法 =====
 
     /** 给用户分配角色 */

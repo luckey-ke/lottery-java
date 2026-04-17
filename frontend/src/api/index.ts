@@ -145,6 +145,14 @@ export default {
     headers: { Authorization: `Bearer ${localStorage.getItem('lottery_token')}` }
   }),
   authConfig: () => authApi.get('/config'),
+  updateProfile: (body: Record<string, unknown>) =>
+    authApi.put('/profile', body, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('lottery_token')}` }
+    }),
+  changePassword: (body: Record<string, unknown>) =>
+    authApi.put('/password', body, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('lottery_token')}` }
+    }),
 
   // ===== 管理员 - 用户 =====
   listUsers: (limit = 20, offset = 0): Promise<AxiosResponse<{ data: any[]; total: number }>> =>

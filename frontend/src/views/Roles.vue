@@ -67,7 +67,7 @@
       </div>
     </Transition>
 
-    <!-- 菜单分配弹窗 -->
+    <!-- 菜单分配弹窗（带折叠） -->
     <Transition name="modal">
       <div v-if="menuDialog" class="modal-overlay" @click.self="menuDialog = null">
         <div class="modal-card modal-lg">
@@ -78,27 +78,44 @@
           <div class="modal-body menu-tree-body">
             <div class="tree-toolbar">
               <button class="btn-sm btn-outline" @click="toggleAllMenus">全选 / 取消全选</button>
+              <button class="btn-sm btn-outline" @click="expandAll">全部展开</button>
+              <button class="btn-sm btn-outline" @click="collapseAll">全部折叠</button>
             </div>
             <div class="menu-tree">
-              <div v-for="m in menuTree" :key="m.menuId" class="tree-node">
-                <label class="tree-label" :class="{ 'is-dir': m.menuType === 'M' }">
-                  <input type="checkbox" :value="m.menuId" v-model="checkedMenuIds" />
-                  <span class="tree-icon">{{ m.menuType === 'M' ? '📁' : '📄' }}</span>
-                  {{ m.menuName }}
-                </label>
-                <div v-if="m.children?.length" class="tree-children">
-                  <div v-for="c in m.children" :key="c.menuId" class="tree-node">
-                    <label class="tree-label">
-                      <input type="checkbox" :value="c.menuId" v-model="checkedMenuIds" />
-                      <span class="tree-icon">📋</span>
-                      {{ c.menuName }}
-                    </label>
-                    <div v-if="c.children?.length" class="tree-children">
+              <div v-for="m in menuTree" :key="m.menuId" class="tree-group">
+                <div class="tree-label" :class="{ 'is-dir': m.menuType === 'M' }">
+                  <button v-if="m.children?.length" class="fold-btn" @click="toggleFold(m.menuId)">
+                    {{ foldedIds.has(m.menuId) ? '▶' : '▼' }}
+                  </button>
+                  <span v-else class="fold-placeholder"></span>
+                  <label class="tree-check">
+                    <input type="checkbox" :value="m.menuId" v-model="checkedMenuIds" />
+                    <span class="tree-icon">{{ m.menuType === 'M' ? '📁' : '📄' }}</span>
+                    {{ m.menuName }}
+                  </label>
+                </div>
+                <div v-if="m.children?.length && !foldedIds.has(m.menuId)" class="tree-children">
+                  <div v-for="c in m.children" :key="c.menuId" class="tree-group">
+                    <div class="tree-label">
+                      <button v-if="c.children?.length" class="fold-btn" @click="toggleFold(c.menuId)">
+                        {{ foldedIds.has(c.menuId) ? '▶' : '▼' }}
+                      </button>
+                      <span v-else class="fold-placeholder"></span>
+                      <label class="tree-check">
+                        <input type="checkbox" :value="c.menuId" v-model="checkedMenuIds" />
+                        <span class="tree-icon">📋</span>
+                        {{ c.menuName }}
+                      </label>
+                    </div>
+                    <div v-if="c.children?.length && !foldedIds.has(c.menuId)" class="tree-children">
                       <label v-for="b in c.children" :key="b.menuId" class="tree-label tree-leaf">
-                        <input type="checkbox" :value="b.menuId" v-model="checkedMenuIds" />
-                        <span class="tree-icon">🔘</span>
-                        {{ b.menuName }}
-                        <span class="perm-tag" v-if="b.perms">{{ b.perms }}</span>
+                        <span class="fold-placeholder"></span>
+                        <span class="tree-check">
+                          <input type="checkbox" :value="b.menuId" v-model="checkedMenuIds" />
+                          <span class="tree-icon">🔘</span>
+                          {{ b.menuName }}
+                          <span class="perm-tag" v-if="b.perms">{{ b.perms }}</span>
+                        </span>
                       </label>
                     </div>
                   </div>
@@ -120,7 +137,8 @@
         <div class="modal-card modal-sm">
           <div class="modal-header"><h3>⚠️ 确认删除</h3></div>
           <div class="modal-body">
-            <p>确定要删除角色 <b>{{ deleteTarget.roleName }}</b> 吗？已关联的用户将失去该角色权限。</p>
+            <p>确定要删除角色 <b>{{ deleteTarget.roleName }}</b> 吗？</p>
+            <p class="form-hint">如果该角色下有用户，删除会失败。</p>
           </div>
           <div class="modal-footer">
             <button class="btn-cancel" @click="deleteTarget = null">取消</button>
@@ -169,6 +187,7 @@ const saving = ref(false)
 // 菜单分配
 const menuDialog = ref<RoleInfo | null>(null)
 const checkedMenuIds = ref<number[]>([])
+const foldedIds = ref<Set<number>>(new Set())
 
 // 删除
 const deleteTarget = ref<RoleInfo | null>(null)
@@ -196,6 +215,31 @@ function flattenMenuIds(items: MenuItem[]): number[] {
     if (item.children?.length) ids.push(...flattenMenuIds(item.children))
   }
   return ids
+}
+
+// 折叠控制
+function toggleFold(menuId: number) {
+  const s = new Set(foldedIds.value)
+  if (s.has(menuId)) s.delete(menuId)
+  else s.add(menuId)
+  foldedIds.value = s
+}
+
+function expandAll() {
+  foldedIds.value = new Set()
+}
+
+function collapseAll() {
+  const s = new Set<number>()
+  for (const m of menuTree.value) {
+    if (m.children?.length) {
+      s.add(m.menuId)
+      for (const c of m.children) {
+        if (c.children?.length) s.add(c.menuId)
+      }
+    }
+  }
+  foldedIds.value = s
 }
 
 function openAdd() {
@@ -231,6 +275,7 @@ async function handleSave() {
 function openMenuAssign(r: RoleInfo) {
   menuDialog.value = r
   checkedMenuIds.value = [...(r.menuIds || [])]
+  foldedIds.value = new Set()
 }
 
 function toggleAllMenus() {
@@ -246,7 +291,6 @@ async function handleSaveMenus() {
   saving.value = true
   try {
     await api.updateRole(menuDialog.value.roleId, { menuIds: checkedMenuIds.value })
-    // 本地更新
     menuDialog.value.menuIds = [...checkedMenuIds.value]
     showToast('菜单权限已更新', 'success')
     menuDialog.value = null
@@ -302,7 +346,7 @@ onMounted(() => { loadRoles(); loadMenuTree() })
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 24px; }
 .modal-card { background: var(--bg-card); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; }
 .modal-sm { max-width: 400px; }
-.modal-lg { max-width: 560px; }
+.modal-lg { max-width: 600px; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--border-light); }
 .modal-header h3 { font-size: 16px; font-weight: 700; }
 .modal-close { width: 32px; height: 32px; border-radius: 50%; border: none; background: var(--bg); color: var(--text-muted); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
@@ -313,6 +357,7 @@ onMounted(() => { loadRoles(); loadMenuTree() })
 
 .form-field { margin-bottom: 16px; }
 .form-field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.form-hint { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 .req { color: var(--red); }
 .input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; outline: none; transition: border-color 0.2s; background: var(--bg); color: var(--text-primary); box-sizing: border-box; }
 .input:focus { border-color: var(--accent); }
@@ -322,16 +367,20 @@ onMounted(() => { loadRoles(); loadMenuTree() })
 .btn-confirm:disabled { opacity: 0.5; }
 .modal-footer .btn-danger { padding: 10px 20px; border: none; border-radius: var(--radius-sm); background: var(--red); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font); }
 
-/* Menu Tree */
+/* Menu Tree with fold */
 .menu-tree-body { max-height: 60vh; overflow-y: auto; }
-.tree-toolbar { margin-bottom: 12px; }
-.menu-tree { display: flex; flex-direction: column; gap: 4px; }
-.tree-node { margin-left: 0; }
-.tree-label { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; transition: background 0.15s; }
+.tree-toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
+.menu-tree { display: flex; flex-direction: column; gap: 2px; }
+.tree-group { }
+.tree-label { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: var(--radius-sm); cursor: default; font-size: 14px; transition: background 0.15s; }
 .tree-label:hover { background: var(--bg); }
-.tree-label.is-dir { font-weight: 600; }
+.tree-label.is-dir .tree-check { font-weight: 600; }
+.fold-btn { width: 20px; height: 20px; border: none; background: none; color: var(--text-muted); font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 4px; padding: 0; flex-shrink: 0; }
+.fold-btn:hover { background: var(--border-light); color: var(--text-primary); }
+.fold-placeholder { width: 20px; flex-shrink: 0; }
+.tree-check { display: flex; align-items: center; gap: 8px; cursor: pointer; flex: 1; }
 .tree-icon { font-size: 14px; }
-.tree-children { margin-left: 28px; border-left: 2px solid var(--border-light); padding-left: 8px; }
+.tree-children { margin-left: 26px; border-left: 2px solid var(--border-light); padding-left: 6px; }
 .tree-leaf { font-size: 13px; color: var(--text-secondary); }
 .perm-tag { font-size: 11px; color: var(--text-muted); background: var(--bg); padding: 1px 6px; border-radius: 4px; margin-left: auto; font-family: monospace; }
 

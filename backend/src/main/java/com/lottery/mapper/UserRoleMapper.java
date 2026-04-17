@@ -21,4 +21,7 @@ public interface UserRoleMapper {
 
     /** 删除指定角色的所有关联 */
     int deleteByRoleId(@Param("roleId") Integer roleId);
+
+    /** 查询分配了指定角色的用户数 */
+    int countUsersByRoleId(@Param("roleId") Integer roleId);
 }

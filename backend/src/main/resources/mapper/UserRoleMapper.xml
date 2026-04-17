@@ -22,4 +22,8 @@
         DELETE FROM sys_user_role WHERE role_id = #{roleId}
     </delete>
 
+    <select id="countUsersByRoleId" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM sys_user_role WHERE role_id = #{roleId}
+    </select>
+
 </mapper>

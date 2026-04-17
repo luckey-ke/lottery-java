@@ -5,7 +5,11 @@
         <h1 class="page-title">菜单管理</h1>
         <p class="page-subtitle">管理系统目录、菜单和按钮权限</p>
       </div>
-      <button class="btn-primary" @click="openAdd(null)">➕ 新增菜单</button>
+      <div class="hero-actions">
+        <button class="btn-sm btn-outline" @click="expandAll" v-if="menuTree.length">全部展开</button>
+        <button class="btn-sm btn-outline" @click="collapseAll" v-if="menuTree.length">全部折叠</button>
+        <button class="btn-primary" @click="openAdd(null)">➕ 新增菜单</button>
+      </div>
     </div>
 
     <!-- 菜单树表格 -->
@@ -43,6 +47,10 @@
             <template v-for="m in menuTree" :key="m.menuId">
               <tr>
                 <td class="name-cell">
+                  <button v-if="m.children?.length" class="fold-btn" @click="toggleFold(m.menuId)">
+                    {{ foldedIds.has(m.menuId) ? '▶' : '▼' }}
+                  </button>
+                  <span v-else class="fold-placeholder"></span>
                   <span class="tree-icon">{{ m.menuType === 'M' ? '📁' : '📄' }}</span>
                   {{ m.menuName }}
                 </td>
@@ -57,10 +65,14 @@
                   <button class="btn-xs btn-danger" @click="confirmDelete(m)">删除</button>
                 </td>
               </tr>
-              <template v-if="m.children?.length">
+              <template v-if="m.children?.length && !foldedIds.has(m.menuId)">
                 <template v-for="c in m.children" :key="c.menuId">
                   <tr>
                     <td class="name-cell indent-1">
+                      <button v-if="c.children?.length" class="fold-btn" @click="toggleFold(c.menuId)">
+                        {{ foldedIds.has(c.menuId) ? '▶' : '▼' }}
+                      </button>
+                      <span v-else class="fold-placeholder"></span>
                       <span class="tree-icon">{{ c.menuType === 'M' ? '📁' : c.menuType === 'F' ? '🔘' : '📋' }}</span>
                       {{ c.menuName }}
                     </td>
@@ -75,9 +87,10 @@
                       <button class="btn-xs btn-danger" @click="confirmDelete(c)">删除</button>
                     </td>
                   </tr>
-                  <template v-if="c.children?.length">
+                  <template v-if="c.children?.length && !foldedIds.has(c.menuId)">
                     <tr v-for="b in c.children" :key="b.menuId">
                       <td class="name-cell indent-2">
+                        <span class="fold-placeholder"></span>
                         <span class="tree-icon">🔘</span>
                         {{ b.menuName }}
                       </td>
@@ -219,6 +232,7 @@ const { showToast } = useGlobal()
 const menuTree = ref<MenuItem[]>([])
 const loading = ref(false)
 const loadError = ref('')
+const foldedIds = ref<Set<number>>(new Set())
 
 // 平铺菜单（供上级菜单选择用）
 const flatMenus = computed(() => {
@@ -245,6 +259,31 @@ const deleting = ref(false)
 
 function typeLabel(t: string) {
   return { M: '目录', C: '菜单', F: '按钮' }[t] || t
+}
+
+// 折叠控制
+function toggleFold(menuId: number) {
+  const s = new Set(foldedIds.value)
+  if (s.has(menuId)) s.delete(menuId)
+  else s.add(menuId)
+  foldedIds.value = s
+}
+
+function expandAll() {
+  foldedIds.value = new Set()
+}
+
+function collapseAll() {
+  const s = new Set<number>()
+  for (const m of menuTree.value) {
+    if (m.children?.length) {
+      s.add(m.menuId)
+      for (const c of m.children) {
+        if (c.children?.length) s.add(c.menuId)
+      }
+    }
+  }
+  foldedIds.value = s
 }
 
 async function loadMenus() {
@@ -320,6 +359,7 @@ onMounted(loadMenus)
 .page-hero { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
 .page-title { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 4px; }
 .page-subtitle { color: var(--text-secondary); font-size: 14px; }
+.hero-actions { display: flex; align-items: center; gap: 8px; }
 .btn-primary { padding: 10px 18px; border: none; border-radius: var(--radius-sm); background: linear-gradient(135deg, var(--accent), var(--purple)); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font); transition: all 0.2s; }
 .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,0.4); }
 
@@ -333,9 +373,12 @@ onMounted(loadMenus)
 .mono { font-family: 'SF Mono', Consolas, monospace; font-size: 12px; }
 .text-muted { color: var(--text-muted); }
 
-.name-cell { display: flex; align-items: center; gap: 8px; font-weight: 500; }
-.indent-1 { padding-left: 36px !important; }
-.indent-2 { padding-left: 64px !important; }
+.name-cell { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+.fold-btn { width: 20px; height: 20px; border: none; background: none; color: var(--text-muted); font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 4px; padding: 0; flex-shrink: 0; }
+.fold-btn:hover { background: var(--border-light); color: var(--text-primary); }
+.fold-placeholder { width: 20px; flex-shrink: 0; }
+.indent-1 { padding-left: 32px !important; }
+.indent-2 { padding-left: 58px !important; }
 .tree-icon { font-size: 14px; }
 
 .type-tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
