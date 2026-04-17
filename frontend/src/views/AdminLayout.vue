@@ -14,6 +14,10 @@
       <div class="sidebar-label" v-if="!sidebarCollapsed">后台管理</div>
 
       <nav class="sidebar-nav">
+        <router-link to="/admin" class="sidebar-item" exact-active-class="active">
+          <MenuIcon name="home" :size="18" fallback="🏠" />
+          <span class="sidebar-text" v-if="!sidebarCollapsed">管理首页</span>
+        </router-link>
         <router-link
           v-for="item in adminMenus"
           :key="item.menuId"
