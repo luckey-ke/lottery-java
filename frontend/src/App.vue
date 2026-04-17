@@ -47,22 +47,16 @@
                       <div class="dropdown-meta" v-if="user?.email">📧 {{ user?.email }}</div>
                     </div>
                   </div>
-                  <div class="dropdown-divider"></div>
-                  <router-link v-if="isAdmin" to="/admin" class="dropdown-item" @click="showUserMenu = false">
-                    <span>⚙️</span> 管理
-                  </router-link>
-                  <router-link v-if="isAdmin" to="/history" class="dropdown-item" @click="showUserMenu = false">
-                    <span>📋</span> 历史
-                  </router-link>
-                  <router-link v-if="isAdmin" to="/users" class="dropdown-item" @click="showUserMenu = false">
-                    <span>👥</span> 用户
-                  </router-link>
-                  <router-link v-if="isAdmin" to="/roles" class="dropdown-item" @click="showUserMenu = false">
-                    <span>🛡️</span> 角色
-                  </router-link>
-                  <router-link v-if="isAdmin" to="/menus" class="dropdown-item" @click="showUserMenu = false">
-                    <span>📂</span> 菜单
-                  </router-link>
+                  <template v-if="isAdmin">
+                    <div class="dropdown-divider"></div>
+                    <router-link to="/admin" class="dropdown-item admin-entry" @click="showUserMenu = false">
+                      <span class="admin-entry-icon">⚙️</span>
+                      <span class="admin-entry-text">
+                        <span class="admin-entry-title">进入后台管理</span>
+                        <span class="admin-entry-desc">管理 · 历史 · 用户 · 角色 · 菜单</span>
+                      </span>
+                    </router-link>
+                  </template>
                   <div class="dropdown-divider"></div>
                   <button class="dropdown-item" @click="openProfileDialog">
                     <span>✏️</span> 修改昵称
@@ -334,6 +328,29 @@ function handleLogout() {
 a.dropdown-item { color: var(--text-primary); }
 .dropdown-logout { color: var(--red); }
 .dropdown-logout:hover { background: var(--red-bg); }
+
+/* Admin entry card */
+.admin-entry {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 12px 16px !important;
+  background: var(--accent-bg) !important;
+  border-radius: var(--radius) !important;
+  margin: 8px 12px !important;
+  width: calc(100% - 24px) !important;
+}
+.admin-entry:hover {
+  background: var(--accent) !important;
+  color: #fff !important;
+}
+.admin-entry:hover .admin-entry-desc {
+  color: rgba(255,255,255,0.7) !important;
+}
+.admin-entry-icon { font-size: 24px; }
+.admin-entry-text { display: flex; flex-direction: column; }
+.admin-entry-title { font-size: 14px; font-weight: 700; }
+.admin-entry-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
 /* Auth buttons */
 .btn-login {

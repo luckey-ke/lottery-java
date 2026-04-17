@@ -116,7 +116,7 @@
     <div class="panel" v-if="recentHistory.length">
       <div class="panel-header">
         <h3>最近执行记录</h3>
-        <router-link to="/history" class="link">查看全部 →</router-link>
+        <router-link to="/admin/history" class="link">查看全部 →</router-link>
       </div>
       <div class="table-wrap">
         <table class="data-table">
@@ -144,7 +144,7 @@
               <td>{{ item.totalFetched || 0 }}</td>
               <td>{{ item.inserted || 0 }}</td>
               <td>
-                <router-link :to="`/history?taskId=${item.taskId}`" class="link">详情 →</router-link>
+                <router-link :to="`/admin/history?taskId=${item.taskId}`" class="link">详情 →</router-link>
               </td>
             </tr>
           </tbody>
