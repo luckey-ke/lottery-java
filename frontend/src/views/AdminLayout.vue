@@ -1,6 +1,5 @@
 <template>
   <div class="admin-layout">
-    <!-- 侧边栏 -->
     <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
         <router-link to="/" class="sidebar-brand">
@@ -15,15 +14,25 @@
       <div class="sidebar-label" v-if="!sidebarCollapsed">后台管理</div>
 
       <nav class="sidebar-nav">
-        <router-link
-          v-for="item in adminMenus"
-          :key="item.menuId"
-          :to="'/admin/' + (item.path || '')"
-          class="sidebar-item"
-          active-class="active"
-        >
-          <span class="sidebar-icon">{{ item.icon || '📄' }}</span>
-          <span class="sidebar-text" v-if="!sidebarCollapsed">{{ item.menuName }}</span>
+        <router-link to="/admin" class="sidebar-item" active-class="active" :exact="true">
+          <span class="sidebar-icon">⚙️</span>
+          <span class="sidebar-text" v-if="!sidebarCollapsed">管理</span>
+        </router-link>
+        <router-link to="/admin/history" class="sidebar-item" active-class="active">
+          <span class="sidebar-icon">📋</span>
+          <span class="sidebar-text" v-if="!sidebarCollapsed">历史</span>
+        </router-link>
+        <router-link to="/admin/user" class="sidebar-item" active-class="active">
+          <span class="sidebar-icon">👥</span>
+          <span class="sidebar-text" v-if="!sidebarCollapsed">用户</span>
+        </router-link>
+        <router-link to="/admin/role" class="sidebar-item" active-class="active">
+          <span class="sidebar-icon">🛡️</span>
+          <span class="sidebar-text" v-if="!sidebarCollapsed">角色</span>
+        </router-link>
+        <router-link to="/admin/menu" class="sidebar-item" active-class="active">
+          <span class="sidebar-icon">📂</span>
+          <span class="sidebar-text" v-if="!sidebarCollapsed">菜单</span>
         </router-link>
       </nav>
 
@@ -35,21 +44,15 @@
       </div>
     </aside>
 
-    <!-- 主内容区 -->
     <div class="admin-main">
       <header class="admin-header">
-        <div class="admin-header-left">
-          <h2 class="admin-page-title">{{ currentTitle }}</h2>
-        </div>
-        <div class="admin-header-right">
-          <div class="admin-user">
-            <span class="admin-user-avatar">{{ isAdmin ? '👑' : '👤' }}</span>
-            <span class="admin-user-name">{{ user?.nickname || user?.username }}</span>
-            <router-link to="/" class="admin-back-link">返回前台 →</router-link>
-          </div>
+        <h2 class="admin-page-title">{{ currentTitle }}</h2>
+        <div class="admin-user">
+          <span class="admin-user-avatar">{{ isAdmin ? '👑' : '👤' }}</span>
+          <span class="admin-user-name">{{ user?.nickname || user?.username }}</span>
+          <router-link to="/" class="admin-back-link">返回前台 →</router-link>
         </div>
       </header>
-
       <div class="admin-content">
         <router-view />
       </div>
@@ -58,48 +61,35 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import api from '../api'
 
 const { user, isAdmin } = useAuth()
 const route = useRoute()
 const sidebarCollapsed = ref(false)
 
-const adminMenus = ref<Array<{ menuId: number; menuName: string; icon: string; path: string }>>([])
-
-async function loadAdminMenus() {
-  try {
-    const { data } = await api.getMenusByLocation('admin')
-    adminMenus.value = data.data || []
-  } catch { adminMenus.value = [] }
+const menuMap: Record<string, { icon: string; label: string }> = {
+  '': { icon: '⚙️', label: '管理' },
+  history: { icon: '📋', label: '历史' },
+  user: { icon: '👥', label: '用户' },
+  role: { icon: '🛡️', label: '角色' },
+  menu: { icon: '📂', label: '菜单' },
 }
-
-onMounted(loadAdminMenus)
 
 const currentTitle = computed(() => {
   const path = route.path.replace('/admin/', '').replace('/admin', '')
-  const item = adminMenus.value.find(i => i.path === path)
-  return item ? `${item.icon || '📄'} ${item.menuName}` : '后台管理'
+  const m = menuMap[path]
+  return m ? `${m.icon} ${m.label}` : '后台管理'
 })
 </script>
 
 <style scoped>
-.admin-layout {
-  display: flex;
-  min-height: 100vh;
-  background: var(--bg);
-}
+.admin-layout { display: flex; min-height: 100vh; background: var(--bg); }
 
 .sidebar {
-  width: 220px;
-  background: var(--bg-card);
-  border-right: 1px solid var(--border-light);
-  display: flex;
-  flex-direction: column;
-  transition: width 0.25s ease;
-  flex-shrink: 0;
+  width: 220px; background: var(--bg-card); border-right: 1px solid var(--border-light);
+  display: flex; flex-direction: column; transition: width 0.25s ease; flex-shrink: 0;
 }
 .sidebar.collapsed { width: 64px; }
 

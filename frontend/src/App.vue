@@ -13,19 +13,17 @@
           <span class="brand-text">Lottery<span class="brand-accent">Lab</span></span>
         </div>
         <nav class="nav">
-          <!-- 公开页面（固定） -->
           <router-link to="/" class="nav-item" active-class="active">
             <span class="nav-icon">📊</span> 总览
           </router-link>
-          <!-- 动态前台菜单 -->
-          <router-link
-            v-for="m in frontendMenus"
-            :key="m.menuId"
-            :to="'/' + m.path"
-            class="nav-item"
-            active-class="active"
-          >
-            <span class="nav-icon">{{ m.icon || '📄' }}</span> {{ m.menuName }}
+          <router-link to="/analysis" class="nav-item" active-class="active">
+            <span class="nav-icon">📈</span> 分析
+          </router-link>
+          <router-link to="/trend" class="nav-item" active-class="active">
+            <span class="nav-icon">🔥</span> 趋势
+          </router-link>
+          <router-link to="/recommend" class="nav-item" active-class="active">
+            <span class="nav-icon">🎯</span> 推荐
           </router-link>
         </nav>
 
@@ -47,6 +45,8 @@
                       <div class="dropdown-meta" v-if="user?.email">📧 {{ user?.email }}</div>
                     </div>
                   </div>
+
+                  <!-- 管理员入口 -->
                   <template v-if="isAdmin">
                     <div class="dropdown-divider"></div>
                     <router-link to="/admin" class="dropdown-item admin-entry" @click="showUserMenu = false">
@@ -57,6 +57,7 @@
                       </span>
                     </router-link>
                   </template>
+
                   <div class="dropdown-divider"></div>
                   <button class="dropdown-item" @click="openProfileDialog">
                     <span>✏️</span> 修改昵称
@@ -160,19 +161,7 @@ const router = useRouter()
 const { message, messageType, isLoading, dismissToast } = useGlobal()
 const { isLoggedIn, isAdmin, user, logout, fetchUser, saveAuth } = useAuth()
 
-// 前台动态菜单
-const frontendMenus = ref<Array<{ menuId: number; menuName: string; icon: string; path: string }>>([])
-
-async function loadFrontendMenus() {
-  if (!isLoggedIn.value) { frontendMenus.value = []; return }
-  try {
-    const { data } = await api.getMenusByLocation('frontend')
-    frontendMenus.value = data.data || []
-  } catch { frontendMenus.value = [] }
-}
-
-// 应用启动时从后端同步用户信息
-onMounted(() => { fetchUser().then(() => loadFrontendMenus()) })
+onMounted(() => { fetchUser() })
 
 const toastIcon = computed(() => {
   switch (messageType.value) {
@@ -213,12 +202,11 @@ async function handleUpdateProfile() {
   profileError.value = ''
   try {
     const { data } = await api.updateProfile({ nickname: profileNickname.value })
-    // 本地更新用户信息
     const token = localStorage.getItem('lottery_token')!
     const refreshToken = localStorage.getItem('lottery_refresh_token')!
     saveAuth(token, refreshToken, { ...user.value!, nickname: data.user.nickname })
     profileDialog.value = false
-    fetchUser() // 同步后端数据
+    fetchUser()
   } catch (e: any) {
     profileError.value = e?.response?.data?.error || '修改失败'
   } finally { saving.value = false }
@@ -250,7 +238,6 @@ async function handleChangePassword() {
   try {
     await api.changePassword({ oldPassword: oldPassword.value, newPassword: newPassword.value })
     passwordDialog.value = false
-    // 密码修改后需要重新登录
     logout()
     router.push('/login')
   } catch (e: any) {
@@ -270,47 +257,22 @@ function handleLogout() {
 @import './styles/variables.css';
 @import './styles/global.css';
 
-/* Nav divider */
-.nav-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--border);
-  margin: 0 4px;
-}
-
 /* User menu */
 .user-menu { position: relative; }
 .user-badge {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  padding: 6px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
-  font-family: var(--font);
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  padding: 6px 12px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); cursor: pointer; display: flex;
+  align-items: center; gap: 6px; transition: all 0.2s; font-family: var(--font);
 }
 .user-badge:hover { border-color: var(--accent); }
 .user-badge.is-admin { color: var(--accent); background: var(--accent-bg); border-color: var(--accent); }
 .dropdown-arrow { font-size: 10px; opacity: 0.6; }
 
-/* Dropdown */
 .user-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 240px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  z-index: 1000;
-  overflow: hidden;
+  position: absolute; top: calc(100% + 8px); right: 0; width: 260px;
+  background: var(--bg-card); border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); z-index: 1000; overflow: hidden;
 }
 .dropdown-header { display: flex; gap: 12px; padding: 16px; }
 .dropdown-avatar { font-size: 28px; }
@@ -319,21 +281,10 @@ function handleLogout() {
 .dropdown-meta { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dropdown-divider { height: 1px; background: var(--border-light); }
 .dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 16px;
-  border: none;
-  background: none;
-  color: var(--text-primary);
-  font-size: 14px;
-  cursor: pointer;
-  transition: background 0.15s;
-  font-family: var(--font);
-  text-align: left;
-  text-decoration: none;
-  box-sizing: border-box;
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 16px; border: none; background: none; color: var(--text-primary);
+  font-size: 14px; cursor: pointer; transition: background 0.15s;
+  font-family: var(--font); text-align: left; text-decoration: none; box-sizing: border-box;
 }
 .dropdown-item:hover { background: var(--bg); }
 a.dropdown-item { color: var(--text-primary); }
@@ -342,22 +293,13 @@ a.dropdown-item { color: var(--text-primary); }
 
 /* Admin entry card */
 .admin-entry {
-  display: flex !important;
-  align-items: center !important;
-  gap: 12px !important;
-  padding: 12px 16px !important;
-  background: var(--accent-bg) !important;
-  border-radius: var(--radius) !important;
-  margin: 8px 12px !important;
+  display: flex !important; align-items: center !important; gap: 12px !important;
+  padding: 12px 16px !important; background: var(--accent-bg) !important;
+  border-radius: var(--radius) !important; margin: 8px 12px !important;
   width: calc(100% - 24px) !important;
 }
-.admin-entry:hover {
-  background: var(--accent) !important;
-  color: #fff !important;
-}
-.admin-entry:hover .admin-entry-desc {
-  color: rgba(255,255,255,0.7) !important;
-}
+.admin-entry:hover { background: var(--accent) !important; color: #fff !important; }
+.admin-entry:hover .admin-entry-desc { color: rgba(255,255,255,0.7) !important; }
 .admin-entry-icon { font-size: 24px; }
 .admin-entry-text { display: flex; flex-direction: column; }
 .admin-entry-title { font-size: 14px; font-weight: 700; }
@@ -365,15 +307,9 @@ a.dropdown-item { color: var(--text-primary); }
 
 /* Auth buttons */
 .btn-login {
-  padding: 8px 16px;
-  background: var(--accent);
-  color: white;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: none;
-  transition: opacity 0.2s;
+  padding: 8px 16px; background: var(--accent); color: white; border: none;
+  border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+  text-decoration: none; transition: opacity 0.2s;
 }
 .btn-login:hover { opacity: 0.9; }
 
