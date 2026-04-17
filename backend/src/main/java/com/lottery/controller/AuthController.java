@@ -226,6 +226,7 @@ public class AuthController {
                 map.put("menuName", m.getMenuName());
                 map.put("icon", m.getIcon());
                 map.put("path", m.getPath());
+                map.put("component", m.getComponent());
                 map.put("orderNum", m.getOrderNum());
                 out.add(map);
             }

@@ -15,7 +15,12 @@ const adminRoutes: RouteRecordRaw = {
   component: () => import('../views/AdminLayout.vue'),
   meta: { requiresAdmin: true },
   children: [
-    { path: '', name: 'AdminHome', component: () => import('../views/Admin.vue') },
+    {
+      path: '',
+      name: 'AdminHome',
+      // 动态解析：根据菜单配置决定加载哪个组件
+      component: () => import('../views/AdminHome.vue'),
+    },
     { path: 'history', name: 'AdminHistory', component: () => import('../views/FetchHistory.vue') },
     { path: 'user', name: 'AdminUsers', component: () => import('../views/Users.vue') },
     { path: 'role', name: 'AdminRoles', component: () => import('../views/Roles.vue') },
