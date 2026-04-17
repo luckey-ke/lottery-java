@@ -1,7 +1,7 @@
 <template>
-  <el-icon v-if="iconComponent" :size="size" :color="color">
+  <span v-if="iconComponent" class="menu-icon-wrap" :style="{ width: size + 'px', height: size + 'px', color }">
     <component :is="iconComponent" />
-  </el-icon>
+  </span>
   <span v-else class="menu-icon-fallback">{{ fallback }}</span>
 </template>
 
@@ -11,7 +11,7 @@ import * as ElementPlusIcons from '@element-plus/icons-vue'
 
 const props = withDefaults(defineProps<{
   name?: string | null
-  size?: number | string
+  size?: number
   color?: string
   fallback?: string
 }>(), {
@@ -20,7 +20,6 @@ const props = withDefaults(defineProps<{
   fallback: '📄',
 })
 
-// kebab-case → PascalCase: setting → Setting, tree-table → TreeTable, trend-charts → TrendCharts
 function toPascalCase(str: string): string {
   return str
     .replace(/(^|[-_\s])(\w)/g, (_, __, c) => c.toUpperCase())
@@ -35,6 +34,17 @@ const iconComponent = computed(() => {
 </script>
 
 <style scoped>
+.menu-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.menu-icon-wrap svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
 .menu-icon-fallback {
   font-size: 18px;
   line-height: 1;
