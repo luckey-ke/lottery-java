@@ -23,7 +23,8 @@
             class="nav-item"
             active-class="active"
           >
-            <span class="nav-icon">{{ m.icon || '📄' }}</span> {{ m.menuName }}
+            <MenuIcon :name="m.icon" :size="16" fallback="📄" />
+            {{ m.menuName }}
           </router-link>
         </nav>
 
@@ -156,6 +157,7 @@ import { useRouter } from 'vue-router'
 import { useGlobal } from './composables/useGlobal'
 import { useAuth } from './composables/useAuth'
 import api from './api'
+import MenuIcon from './components/MenuIcon.vue'
 
 const router = useRouter()
 const { message, messageType, isLoading, dismissToast } = useGlobal()

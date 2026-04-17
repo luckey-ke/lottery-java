@@ -21,7 +21,7 @@
           class="sidebar-item"
           active-class="active"
         >
-          <span class="sidebar-icon">{{ item.icon || '📄' }}</span>
+          <MenuIcon :name="item.icon" :size="18" fallback="📄" />
           <span class="sidebar-text" v-if="!sidebarCollapsed">{{ item.menuName }}</span>
         </router-link>
       </nav>
@@ -55,6 +55,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 import api from '../api'
+import MenuIcon from '../components/MenuIcon.vue'
 
 const { user, isAdmin } = useAuth()
 const route = useRoute()

@@ -58,7 +58,7 @@
                 <td><span class="type-tag" :class="m.menuType">{{ typeLabel(m.menuType) }}</span></td>
                 <td><span class="location-tag" :class="m.menuLocation">{{ locationLabel(m.menuLocation) }}</span></td>
                 <td class="mono text-muted">{{ m.path || '-' }}</td>
-                <td>{{ m.icon || '-' }}</td>
+                <td class="icon-cell"><MenuIcon :name="m.icon" :size="18" fallback="-" /></td>
                 <td>{{ m.orderNum }}</td>
                 <td><span :class="['status-dot', m.status === '0' ? 'active' : 'disabled']">{{ m.status === '0' ? '正常' : '停用' }}</span></td>
                 <td class="actions-cell">
@@ -81,7 +81,7 @@
                     <td><span class="type-tag" :class="c.menuType">{{ typeLabel(c.menuType) }}</span></td>
                     <td><span class="location-tag" :class="c.menuLocation">{{ locationLabel(c.menuLocation) }}</span></td>
                     <td class="mono text-muted">{{ c.perms || c.path || '-' }}</td>
-                    <td>{{ c.icon || '-' }}</td>
+                    <td class="icon-cell"><MenuIcon :name="c.icon" :size="18" fallback="-" /></td>
                     <td>{{ c.orderNum }}</td>
                     <td><span :class="['status-dot', c.status === '0' ? 'active' : 'disabled']">{{ c.status === '0' ? '正常' : '停用' }}</span></td>
                     <td class="actions-cell">
@@ -222,6 +222,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useGlobal } from '../composables/useGlobal'
 import api from '../api'
+import MenuIcon from '../components/MenuIcon.vue'
 
 interface MenuItem {
   menuId: number
