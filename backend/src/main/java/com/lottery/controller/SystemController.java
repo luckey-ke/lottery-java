@@ -72,7 +72,7 @@ public class SystemController {
             map.put("email", u.getEmail());
             map.put("phone", u.getPhone());
             map.put("status", u.getStatus());
-            map.put("roles", roles);
+            map.put("roles", roles.stream().map(Role::getRoleKey).toList());
             map.put("roleIds", roles.stream().map(Role::getRoleId).toList());
             map.put("loginDate", u.getLoginDate());
             map.put("createdAt", u.getCreatedAt());
