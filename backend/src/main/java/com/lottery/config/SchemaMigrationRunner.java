@@ -391,6 +391,8 @@ public class SchemaMigrationRunner {
 
     private void migrateMenuLocations() {
         try {
+            String now = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+
             // 1. 前台页面设为 frontend
             String[] frontendPaths = {"dashboard", "analysis", "trend", "recommend"};
             for (String p : frontendPaths) {
@@ -405,13 +407,37 @@ public class SchemaMigrationRunner {
                     "UPDATE sys_menu SET path = 'history' WHERE menu_name = '拉取历史' AND path = 'fetch-history'"
             );
 
-            // 3. 确保 admin 位置的菜单存在（如果还没有的话）
+            // 2.1 删除顶层多余的"拉取历史"（数据管理下已有子菜单"拉取历史"，顶层不应重复）
+            // 先检查是否有"数据管理"目录存在，如果有则删除顶层的重复项
+            try {
+                int dataDirCount = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(1) FROM sys_menu WHERE menu_name = '数据管理' AND menu_type = 'M'",
+                        Integer.class
+                );
+                if (dataDirCount > 0) {
+                    jdbcTemplate.update(
+                            "DELETE FROM sys_role_menu WHERE menu_id IN (SELECT menu_id FROM sys_menu WHERE menu_name = '拉取历史' AND parent_id = 0)"
+                    );
+                    jdbcTemplate.update(
+                            "DELETE FROM sys_menu WHERE menu_name = '拉取历史' AND parent_id = 0"
+                    );
+                }
+            } catch (Exception e) {
+                log.debug("[SchemaMigration] 清理重复拉取历史跳过: {}", e.getMessage());
+            }
+
+            // 3. 修复"数据管理"：应为目录类型(M)而非菜单类型(C)
+            //    容器节点不应出现在侧栏导航中，其子菜单通过递归收集
+            jdbcTemplate.update(
+                    "UPDATE sys_menu SET menu_type = 'M', path = NULL, component = NULL WHERE menu_name = '数据管理' AND menu_type = 'C'"
+            );
+
+            // 4. 确保 admin 位置的菜单存在（如果还没有的话）
             int adminMenuCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(1) FROM sys_menu WHERE menu_location = 'admin' AND menu_type = 'C'",
+                    "SELECT COUNT(1) FROM sys_menu WHERE menu_location = 'admin' AND menu_type = 'C' AND parent_id = 0",
                     Integer.class
             );
             if (adminMenuCount == 0) {
-                String now = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
                 // 创建后台菜单项
                 String[][] adminMenus = {
                     {"管理后台", "", "Admin", "C", "1", "setting"},
@@ -441,11 +467,74 @@ public class SchemaMigrationRunner {
                 }
             }
 
-            // 4. 修复"数据管理"：应为目录类型(M)而非菜单类型(C)
-            //    容器节点不应出现在侧栏导航中，其子菜单通过递归收集
-            jdbcTemplate.update(
-                    "UPDATE sys_menu SET menu_type = 'M' WHERE menu_name = '数据管理' AND menu_type = 'C'"
+            // 5. 确保"管理后台"菜单存在且配置正确
+            int adminHomeCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(1) FROM sys_menu WHERE menu_name = '管理后台' AND menu_location = 'admin'",
+                    Integer.class
             );
+            if (adminHomeCount == 0) {
+                jdbcTemplate.update(
+                        "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, icon, visible, status, menu_location, created_at, updated_at) VALUES ('管理后台', 0, 0, '', 'Admin', 'C', 'setting', '0', '0', 'admin', ?, ?)",
+                        now, now
+                );
+                int newId = jdbcTemplate.queryForObject("SELECT MAX(menu_id) FROM sys_menu", Integer.class);
+                Integer adminRoleId = jdbcTemplate.queryForObject("SELECT role_id FROM sys_role WHERE role_key = 'admin'", Integer.class);
+                if (adminRoleId != null) {
+                    try {
+                        jdbcTemplate.update("INSERT INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)", adminRoleId, newId);
+                    } catch (Exception ignored) {}
+                }
+                log.info("[SchemaMigration] 已创建管理后台首页菜单");
+            } else {
+                // 确保已有的"管理后台"菜单配置正确
+                jdbcTemplate.update(
+                        "UPDATE sys_menu SET path = '', component = 'Admin', menu_type = 'C', menu_location = 'admin' WHERE menu_name = '管理后台' AND menu_location = 'admin'"
+                );
+            }
+
+            // 6. 确保"数据拉取"按钮存在（menu_type='F'，在"数据管理"目录下）
+            int dataMenuId = -1;
+            try {
+                dataMenuId = jdbcTemplate.queryForObject(
+                        "SELECT menu_id FROM sys_menu WHERE menu_name = '数据管理' AND menu_type = 'M'",
+                        Integer.class
+                );
+            } catch (Exception ignored) {}
+
+            if (dataMenuId > 0) {
+                int fetchBtnCount = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(1) FROM sys_menu WHERE menu_name = '数据拉取' AND parent_id = ?",
+                        Integer.class, dataMenuId
+                );
+                if (fetchBtnCount == 0) {
+                    jdbcTemplate.update(
+                            "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, perms, icon, visible, status, created_at, updated_at) VALUES ('数据拉取', ?, 1, '#', NULL, 'F', 'lottery:lottery:fetch', NULL, '0', '0', ?, ?)",
+                            dataMenuId, now, now
+                    );
+                    int btnId = jdbcTemplate.queryForObject("SELECT MAX(menu_id) FROM sys_menu", Integer.class);
+                    Integer adminRoleId = jdbcTemplate.queryForObject("SELECT role_id FROM sys_role WHERE role_key = 'admin'", Integer.class);
+                    if (adminRoleId != null) {
+                        try {
+                            jdbcTemplate.update("INSERT INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)", adminRoleId, btnId);
+                        } catch (Exception ignored) {}
+                    }
+                    log.info("[SchemaMigration] 已创建数据拉取按钮菜单");
+                }
+            }
+
+            // 7. 确保所有后台菜单已关联到管理员角色
+            Integer adminRoleId = null;
+            try {
+                adminRoleId = jdbcTemplate.queryForObject("SELECT role_id FROM sys_role WHERE role_key = 'admin'", Integer.class);
+            } catch (Exception ignored) {}
+            if (adminRoleId != null) {
+                List<Integer> allMenuIds = jdbcTemplate.queryForList("SELECT menu_id FROM sys_menu WHERE menu_location = 'admin' OR menu_location IS NULL", Integer.class);
+                for (Integer mid : allMenuIds) {
+                    try {
+                        jdbcTemplate.update("INSERT OR IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (?, ?)", adminRoleId, mid);
+                    } catch (Exception ignored) {}
+                }
+            }
 
             log.info("[SchemaMigration] menu_location 数据迁移完成");
         } catch (Exception e) {
@@ -566,10 +655,10 @@ public class SchemaMigrationRunner {
                         "数据总览", 0, 2, "dashboard", "Dashboard", "C", "lottery:dashboard:list", "dashboard", "0", "0", "frontend", now, now
                 );
 
-                // --- 数据管理 (目录) ---
+                // --- 数据管理 (目录，M类型不会出现在侧栏，子菜单通过递归收集) ---
                 jdbcTemplate.update(
                         "INSERT INTO sys_menu (menu_name, parent_id, order_num, path, component, menu_type, perms, icon, visible, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        "数据管理", 0, 3, "admin", "Admin", "C", null, "data-board", "0", "0", now, now
+                        "数据管理", 0, 3, null, null, "M", null, "data-board", "0", "0", now, now
                 );
                 int dataMenuId = jdbcTemplate.queryForObject("SELECT MAX(menu_id) FROM sys_menu", Integer.class);
 
