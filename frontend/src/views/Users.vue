@@ -133,9 +133,12 @@
             </div>
             <div class="form-field">
               <label>角色</label>
-              <select v-model="editForm.roleId" class="input">
-                <option v-for="r in allRoles" :key="r.roleId" :value="r.roleId">{{ r.roleName }}</option>
-              </select>
+              <div class="checkbox-group">
+                <label v-for="r in allRoles" :key="r.roleId" class="checkbox-label">
+                  <input type="checkbox" :value="r.roleId" v-model="editForm.roleIds" />
+                  {{ r.roleName }}
+                </label>
+              </div>
             </div>
             <div class="form-field">
               <label>状态</label>
@@ -226,7 +229,7 @@ const editError = ref('')
 const editForm = reactive({
   username: '',
   nickname: '',
-  roleId: 0 as number,
+  roleIds: [] as number[],
   status: '0',
   password: '',
 })
@@ -281,7 +284,7 @@ function openEditDialog(u: UserInfo) {
   editError.value = ''
   editForm.username = u.username
   editForm.nickname = u.nickname || ''
-  editForm.roleId = u.roleIds[0] ?? 0
+  editForm.roleIds = [...(u.roleIds || [])]
   editForm.status = u.status
   editForm.password = ''
 }
@@ -295,11 +298,9 @@ async function handleEdit() {
     username: editForm.username,
     nickname: editForm.nickname,
     status: editForm.status,
+    roleIds: editForm.roleIds,
   }
 
-  if (editForm.roleId) {
-    body.roleIds = [editForm.roleId]
-  }
   if (editForm.password && editForm.password.length >= 6) {
     body.password = editForm.password
   }
@@ -311,11 +312,10 @@ async function handleEdit() {
     u.username = editForm.username
     u.nickname = editForm.nickname
     u.status = editForm.status
-    if (editForm.roleId) {
-      u.roleIds = [editForm.roleId]
-      const role = allRoles.value.find(r => r.roleId === editForm.roleId)
-      u.roles = role ? [role.roleKey] : u.roles
-    }
+    u.roleIds = [...editForm.roleIds]
+    u.roles = editForm.roleIds
+      .map(id => allRoles.value.find(r => r.roleId === id)?.roleKey)
+      .filter((k): k is string => !!k)
     showToast('用户信息已更新', 'success')
     editTarget.value = null
   } catch (e: any) {
