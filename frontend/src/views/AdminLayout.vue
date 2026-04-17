@@ -15,16 +15,32 @@
       <div class="sidebar-label" v-if="!sidebarCollapsed">后台管理</div>
 
       <nav class="sidebar-nav">
-        <router-link
-          v-for="item in adminMenus"
-          :key="item.path"
-          :to="'/admin/' + (item.path || '')"
-          class="sidebar-item"
-          active-class="active"
-        >
-          <span class="sidebar-icon">{{ item.icon || '📄' }}</span>
-          <span class="sidebar-text" v-if="!sidebarCollapsed">{{ item.menuName }}</span>
-        </router-link>
+        <template v-for="item in adminMenus" :key="item.menuId">
+          <!-- 目录类型：分组标题 + 子菜单 -->
+          <template v-if="item.menuType === 'M'">
+            <div class="sidebar-group" v-if="!sidebarCollapsed">{{ item.icon || '📁' }} {{ item.menuName }}</div>
+            <router-link
+              v-for="child in item.children"
+              :key="child.menuId"
+              :to="resolvePath(child.path)"
+              class="sidebar-item indent"
+              active-class="active"
+            >
+              <span class="sidebar-icon">{{ child.icon || '📄' }}</span>
+              <span class="sidebar-text" v-if="!sidebarCollapsed">{{ child.menuName }}</span>
+            </router-link>
+          </template>
+          <!-- 菜单类型：直接显示为链接 -->
+          <router-link
+            v-else
+            :to="resolvePath(item.path)"
+            class="sidebar-item"
+            active-class="active"
+          >
+            <span class="sidebar-icon">{{ item.icon || '📄' }}</span>
+            <span class="sidebar-text" v-if="!sidebarCollapsed">{{ item.menuName }}</span>
+          </router-link>
+        </template>
       </nav>
 
       <div class="sidebar-footer">
@@ -63,12 +79,21 @@ import { useRoute } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 import api from '../api'
 
+interface MenuNode {
+  menuId: number
+  menuName: string
+  icon: string
+  path: string
+  menuType: string
+  orderNum: number
+  children?: MenuNode[]
+}
+
 const { user, isAdmin } = useAuth()
 const route = useRoute()
 const sidebarCollapsed = ref(false)
 
-// 后台动态菜单
-const adminMenus = ref<Array<{ menuId: number; menuName: string; icon: string; path: string }>>([])
+const adminMenus = ref<MenuNode[]>([])
 
 async function loadAdminMenus() {
   try {
@@ -79,11 +104,27 @@ async function loadAdminMenus() {
 
 onMounted(loadAdminMenus)
 
+/** 收集所有菜单项用于标题查找 */
+function collectAll(menus: MenuNode[]): MenuNode[] {
+  const out: MenuNode[] = []
+  for (const m of menus) {
+    if (m.menuType !== 'M') out.push(m)
+    if (m.children) out.push(...collectAll(m.children))
+  }
+  return out
+}
+
 const currentTitle = computed(() => {
   const path = route.path.replace('/admin/', '').replace('/admin', '')
-  const item = adminMenus.value.find(i => i.path === path)
+  const all = collectAll(adminMenus.value)
+  const item = all.find(i => i.path === path)
   return item ? `${item.icon || '📄'} ${item.menuName}` : '后台管理'
 })
+
+function resolvePath(path: string) {
+  if (!path || path === '#') return '/admin'
+  return '/admin/' + path
+}
 </script>
 
 <style scoped>
@@ -157,6 +198,16 @@ const currentTitle = computed(() => {
   gap: 2px;
 }
 
+/* 分组标题 */
+.sidebar-group {
+  padding: 16px 12px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .sidebar-item {
   display: flex;
   align-items: center;
@@ -177,6 +228,9 @@ const currentTitle = computed(() => {
   background: var(--accent-bg);
   color: var(--accent);
   font-weight: 600;
+}
+.sidebar-item.indent {
+  padding-left: 24px;
 }
 .sidebar.collapsed .sidebar-item {
   justify-content: center;

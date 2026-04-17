@@ -18,15 +18,27 @@
             <span class="nav-icon">📊</span> 总览
           </router-link>
           <!-- 动态前台菜单 -->
-          <router-link
-            v-for="m in frontendMenus"
-            :key="m.path"
-            :to="'/' + m.path"
-            class="nav-item"
-            active-class="active"
-          >
-            <span class="nav-icon">{{ m.icon || '📄' }}</span> {{ m.menuName }}
-          </router-link>
+          <template v-for="m in frontendMenus" :key="m.menuId">
+            <template v-if="m.menuType === 'M' && m.children?.length">
+              <router-link
+                v-for="child in m.children"
+                :key="child.menuId"
+                :to="'/' + child.path"
+                class="nav-item"
+                active-class="active"
+              >
+                <span class="nav-icon">{{ child.icon || '📄' }}</span> {{ child.menuName }}
+              </router-link>
+            </template>
+            <router-link
+              v-else
+              :to="'/' + m.path"
+              class="nav-item"
+              active-class="active"
+            >
+              <span class="nav-icon">{{ m.icon || '📄' }}</span> {{ m.menuName }}
+            </router-link>
+          </template>
         </nav>
 
         <!-- 登录/用户信息 -->
@@ -161,7 +173,7 @@ const { message, messageType, isLoading, dismissToast } = useGlobal()
 const { isLoggedIn, isAdmin, user, logout, fetchUser, saveAuth } = useAuth()
 
 // 前台动态菜单
-const frontendMenus = ref<Array<{ menuId: number; menuName: string; icon: string; path: string }>>([])
+const frontendMenus = ref<Array<{ menuId: number; menuName: string; icon: string; path: string; menuType: string; children?: Array<{ menuId: number; menuName: string; icon: string; path: string }> }>>([])
 
 async function loadFrontendMenus() {
   if (!isLoggedIn.value) { frontendMenus.value = []; return }

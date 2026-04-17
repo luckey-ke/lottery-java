@@ -202,37 +202,59 @@ public class AuthController {
 
         List<Menu> menus = permissionService.getMenus(user.getId());
 
-        // 按 location 过滤，只返回目录和菜单类型
         String target = location.equals("frontend") ? Menu.LOCATION_FRONTEND : Menu.LOCATION_ADMIN;
-        List<Map<String, Object>> result = new ArrayList<>();
-        flattenMenuTree(menus, target, result);
 
-        // 按 orderNum 排序
-        result.sort(Comparator.comparingInt(m -> (Integer) m.getOrDefault("orderNum", 0)));
+        // 过滤：只保留本 location 的节点（目录+菜单），跳过按钮
+        List<Map<String, Object>> filtered = new ArrayList<>();
+        for (Menu m : menus) {
+            if (Menu.TYPE_BUTTON.equals(m.getMenuType())) continue;
+            if (Menu.TYPE_DIR.equals(m.getMenuType())) {
+                // 目录：递归收集子菜单中属于本 location 的
+                List<Map<String, Object>> children = collectChildren(m.getChildren(), target);
+                if (!children.isEmpty()) {
+                    Map<String, Object> map = menuToMap(m);
+                    map.put("children", children);
+                    filtered.add(map);
+                }
+            } else if (target.equals(m.getMenuLocation())) {
+                filtered.add(menuToMap(m));
+            }
+        }
+
+        filtered.sort(Comparator.comparingInt(m -> (Integer) m.getOrDefault("orderNum", 0)));
 
         Map<String, Object> res = new LinkedHashMap<>();
-        res.put("data", result);
+        res.put("data", filtered);
         return res;
     }
 
-    private void flattenMenuTree(List<Menu> tree, String target, List<Map<String, Object>> out) {
-        for (Menu m : tree) {
-            if (Menu.TYPE_BUTTON.equals(m.getMenuType()) || Menu.TYPE_DIR.equals(m.getMenuType())) continue;
-            if (target.equals(m.getMenuLocation())) {
-                Map<String, Object> map = new LinkedHashMap<>();
-                map.put("menuId", m.getMenuId());
-                map.put("menuName", m.getMenuName());
-                map.put("icon", m.getIcon());
-                map.put("path", m.getPath());
-                map.put("component", m.getComponent());
-                map.put("menuType", m.getMenuType());
-                map.put("orderNum", m.getOrderNum());
-                out.add(map);
-            }
-            if (m.getChildren() != null && !m.getChildren().isEmpty()) {
-                flattenMenuTree(m.getChildren(), target, out);
+    private List<Map<String, Object>> collectChildren(List<Menu> children, String target) {
+        if (children == null || children.isEmpty()) return List.of();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Menu c : children) {
+            if (Menu.TYPE_BUTTON.equals(c.getMenuType())) continue;
+            if (target.equals(c.getMenuLocation())) {
+                Map<String, Object> map = menuToMap(c);
+                if (c.getChildren() != null && !c.getChildren().isEmpty()) {
+                    List<Map<String, Object>> sub = collectChildren(c.getChildren(), target);
+                    if (!sub.isEmpty()) map.put("children", sub);
+                }
+                result.add(map);
             }
         }
+        result.sort(Comparator.comparingInt(m -> (Integer) m.getOrDefault("orderNum", 0)));
+        return result;
+    }
+
+    private Map<String, Object> menuToMap(Menu m) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("menuId", m.getMenuId());
+        map.put("menuName", m.getMenuName());
+        map.put("icon", m.getIcon());
+        map.put("path", m.getPath());
+        map.put("menuType", m.getMenuType());
+        map.put("orderNum", m.getOrderNum());
+        return map;
     }
 
     /** 修改个人资料（昵称） */
